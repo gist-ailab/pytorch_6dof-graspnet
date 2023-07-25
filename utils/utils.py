@@ -366,6 +366,7 @@ def transform_control_points_numpy(gt_grasps, batch_size, mode='qt'):
         assert (grasp_shape[1] == 4 and grasp_shape[2] == 4), grasp_shape
         control_points = get_control_point_tensor(batch_size, use_torch=False)
         shape = control_points.shape
+
         ones = np.ones((shape[0], shape[1], 1), dtype=np.float32)
         control_points = np.concatenate((control_points, ones), -1)
         return np.matmul(control_points, np.transpose(gt_grasps, (0, 2, 1)))

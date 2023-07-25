@@ -180,7 +180,12 @@ class BaseOptions:
             'initially I wanted to compute confidence for vae and evaluator outputs, '
             'setting the confidence weight to 1. immediately pushes the confidence to 1.0.'
         )
-
+        self.parser.add_argument(
+            '--is_bimanual', 
+            type=bool,
+            default=False,
+        )
+        
     def parse(self):
         if not self.initialized:
             self.initialize()
@@ -226,6 +231,8 @@ class BaseOptions:
                     self.opt.pointnet_radius).split(".")[-1]
             if self.opt.arch == "vae" or self.opt.arch == "gan":
                 name += "_latent_size_" + str(self.opt.latent_size)
+            if self.opt.is_bimanual:
+                name += "_bimanual"
 
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)

@@ -5,7 +5,10 @@ from models import create_model
 from utils.writer import Writer
 from test import run_test
 import threading
+import numpy as np
 
+import warnings
+warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
 
 def main():
     opt = TrainOptions().parse()
@@ -13,7 +16,11 @@ def main():
         return
 
     dataset = DataLoader(opt)
-    dataset_size = len(dataset) * opt.num_grasps_per_object
+    if opt.is_bimanual:
+        dataset_size = len(dataset)
+    else:    
+        dataset_size = len(dataset) * opt.num_grasps_per_object
+
     model = create_model(opt)
     writer = Writer(opt)
     total_steps = 0
@@ -22,6 +29,7 @@ def main():
         iter_data_time = time.time()
         epoch_iter = 0
         for i, data in enumerate(dataset):
+
             iter_start_time = time.time()
             if total_steps % opt.print_freq == 0:
                 t_data = iter_start_time - iter_data_time
@@ -83,7 +91,7 @@ def main():
             writer.plot_model_wts(model, epoch)
 
         if epoch % opt.run_test_freq == 0:
-            acc = run_test(epoch, name=opt.name)
+            acc = run_test(epoch, name=opt.name, is_train=False)
             writer.plot_acc(acc, epoch)
 
     writer.close()

@@ -79,3 +79,5 @@ class TrainOptions(BaseOptions):
                                  action='store_true',
                                  help='plots network weights, etc.')
         self.is_train = True
+        
+        

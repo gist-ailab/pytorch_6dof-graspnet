@@ -4,12 +4,12 @@ from models import create_model
 from utils.writer import Writer
 
 
-def run_test(epoch=-1, name=""):
+def run_test(epoch=-1, name="", is_train=True):
     print('Running Test')
     opt = TestOptions().parse()
     opt.serial_batches = True  # no shuffle
     opt.name = name
-    dataset = DataLoader(opt)
+    dataset = DataLoader(opt, is_train)
     model = create_model(opt)
     writer = Writer(opt)
     # test

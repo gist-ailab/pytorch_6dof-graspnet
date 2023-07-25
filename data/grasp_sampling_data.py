@@ -3,7 +3,10 @@ import torch
 from data.base_dataset import BaseDataset, NoPositiveGraspsException
 import numpy as np
 from utils import utils
-
+from utils.sample import Object
+import copy
+import h5py
+import random
 
 class GraspSamplingData(BaseDataset):
     def __init__(self, opt):
@@ -20,12 +23,14 @@ class GraspSamplingData(BaseDataset):
 
     def __getitem__(self, index):
         path = self.paths[index]
+        # print('grasp path is >>>>>>>',path)
         pos_grasps, pos_qualities, _, _, _, cad_path, cad_scale = self.read_grasp_file(
             path)
         meta = {}
         try:
             all_clusters = self.sample_grasp_indexes(
                 self.opt.num_grasps_per_object, pos_grasps, pos_qualities)
+
         except NoPositiveGraspsException:
             if self.opt.skip_error:
                 return None
@@ -51,6 +56,7 @@ class GraspSamplingData(BaseDataset):
                 selected_grasp_index[1]]
             output_qualities.append(selected_quality)
             output_grasps.append(camera_pose.dot(selected_grasp))
+
         gt_control_points = utils.transform_control_points_numpy(
             np.array(output_grasps), self.opt.num_grasps_per_object, mode='rt')
 
@@ -70,3 +76,173 @@ class GraspSamplingData(BaseDataset):
 
     def __len__(self):
         return self.size
+
+class BimanualGraspSamplingData(BaseDataset):
+    def __init__(self, opt, is_train=True):
+        BaseDataset.__init__(self, opt)
+        self.opt = opt
+        self.device = torch.device('cuda:{}'.format(
+            opt.gpu_ids[0])) if opt.gpu_ids else torch.device('cpu')
+        self.root = opt.dataset_root_folder
+        # self.paths = self.make_dataset()
+        # self.size = len(self.paths)
+        #self.get_mean_std()
+        opt.input_nc = self.ninput_channels
+        self.is_train = is_train
+        self.paths = self.make_dataset()
+        self.size = len(self.paths)
+        self.i = 0
+
+    def make_dataset(self):
+        files = []
+        file_list = os.listdir(os.path.join(self.opt.dataset_root_folder,
+                               'grasps'))
+        files = [os.path.join(self.opt.dataset_root_folder, 'grasps', file) for file in file_list]
+        
+        if not self.is_train:
+            files = files[3315:]
+        else:
+            files = files[:3315]
+
+        return files
+    
+    def __getitem__(self, index):
+        path = self.paths[index]
+        pos_grasps, pos_qualities, _, cad_path, cad_scale = self.read_grasp_file(path)
+        meta = {}
+        #sample the grasp idx for data loader
+        sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
+        
+        # render the scene to get pc and camera pose using pyrender
+        pc, camera_pose, _ = self.change_object_and_render(
+            cad_path,
+            cad_scale,
+            thread_id=torch.utils.data.get_worker_info().id
+            if torch.utils.data.get_worker_info() else 0)
+        
+        # get the grasp and quality for the sampled grasp idx
+        output_qualities = []
+        output_grasps = []
+        for iter in range(self.opt.num_grasps_per_object):
+            selected_grasp_index = sampled_grasp_idxs[iter]
+
+            selected_grasp = pos_grasps[selected_grasp_index]
+            selected_quality = pos_qualities[selected_grasp_index]
+            output_qualities.append(selected_quality)
+            output_grasps.append(camera_pose.dot(selected_grasp)) #(64, 4, 4)
+        
+        gt_control_points = utils.transform_control_points_numpy(
+            np.array(output_grasps), self.opt.num_grasps_per_object, mode='rt') #(64, 6, 4)
+
+        meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
+        meta['grasp_rt'] = np.array(output_grasps).reshape(
+            len(output_grasps), -1)
+        meta['pc_pose'] = np.array([utils.inverse_transform(camera_pose)] *
+                                   self.opt.num_grasps_per_object)
+        meta['cad_path'] = np.array([cad_path] *
+                                    self.opt.num_grasps_per_object)
+        meta['cad_scale'] = np.array([cad_scale] *
+                                     self.opt.num_grasps_per_object)
+        meta['quality'] = np.array(output_qualities)
+        meta['target_cps'] = np.array(gt_control_points[:, :, :3])
+        return meta
+    
+    def __len__(self):
+        return self.size
+        
+        
+    
+    def read_grasp_file(self, path, return_all_grasps=False):
+        file_name = path
+        if self.caching and file_name in self.cache:
+            pos_grasps, pos_qualities, cad, cad_path, cad_scale = copy.deepcopy(
+                self.cache[file_name])
+            return pos_grasps, pos_qualities, cad, cad_path, cad_scale
+            
+        pos_grasps, pos_qualities, cad, cad_path, cad_scale = self.read_object_grasp_data(
+            path,
+            ratio_of_grasps_to_be_used=self.opt.grasps_ratio,
+            return_all_grasps=return_all_grasps)
+        
+        
+        return pos_grasps, pos_qualities, cad, cad_path, cad_scale
+
+    
+    def read_object_grasp_data(self, 
+                               h5_path, 
+                               quality=['Dexterity', 'Force_closure', 'Torque_optimization'], 
+                               ratio_of_grasps_to_be_used=1, 
+                               return_all_grasps=False):
+        
+        num_clusters = self.opt.num_grasp_clusters
+        root_folder = self.opt.dataset_root_folder
+        mesh_root = 'meshes'
+        
+        if num_clusters <= 0:
+            raise NoPositiveGraspsException
+        
+        # read h5 grasp file
+        h5_file = h5py.File(h5_path, 'r')
+        mesh_fname = h5_file['object/file'][()]
+
+        mesh_scale = h5_file['object/scale'][()]
+        # load and rescale, translate object mesh
+        object_model = Object(os.path.join(root_folder, mesh_root, mesh_fname))
+        object_model.rescale(mesh_scale)
+        object_model = object_model.mesh
+        object_mean = np.mean(object_model.vertices, 0, keepdims=1)
+        object_model.vertices -= object_mean
+        # load bimanual grasp
+        grasps = np.asarray(h5_file['grasps/transforms'])
+        grasps[:, :, :3, 3] -= object_mean
+        
+        # scale each grasp quality and sum them up
+        force_closure = np.array(h5_file["/grasps/qualities/Force_closure"])
+        torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
+        dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
+        
+        force_closure_weight = 0.4
+        torque_optimization_weight = 0.5
+        dexterity_weight = 0.1
+        
+        sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
+                        dexterity_weight * dexterity
+        
+        # filter bimanual grasp to unique single grasp and corresponding quality
+        single_grasp, single_grasp_quality = self.filter_single_grasp(sum_quality, grasps)
+        
+        return single_grasp, single_grasp_quality, object_model, os.path.join(root_folder, mesh_root, mesh_fname), mesh_scale
+        
+        
+    def filter_single_grasp(self, sum_quality, grasps):
+        first_grasp_candidate = np.unique(grasps[:, 0, :, :], axis=0)
+        second_grasp_candidate = np.unique(grasps[:, 1, :, :], axis=0)
+        total_grasp_candidate = np.concatenate((first_grasp_candidate, second_grasp_candidate), axis=0)
+        unique_single_grasp_candidate = np.unique(total_grasp_candidate, axis=0)
+        
+        paired_first_grasp_quality = []
+        for i in range(len(unique_single_grasp_candidate)):
+            first_grasp = total_grasp_candidate[i]
+            paired_grasp_idxs = self.find_paired_grasp(first_grasp, grasps)
+            total_quality = 0
+            for idx in paired_grasp_idxs:
+                total_quality += sum_quality[idx]
+            total_quality /= len(paired_grasp_idxs)
+            paired_first_grasp_quality.append(total_quality)
+        
+        paired_first_grasp_quality = np.array(paired_first_grasp_quality)
+            
+        return unique_single_grasp_candidate, paired_first_grasp_quality
+            
+    
+    
+    def find_paired_grasp(self, first_grasp, bimanual_grasps):
+        index_list = []
+        grasp_transform = bimanual_grasps
+
+        for i in range(len(grasp_transform)):
+
+            if np.array_equal(first_grasp, grasp_transform[i][0]) or np.array_equal(first_grasp, grasp_transform[i][1]):
+                index_list.append(i)
+        
+        return index_list

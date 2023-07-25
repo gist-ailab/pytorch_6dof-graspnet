@@ -1,0 +1,5 @@
+================ Training Loss (Tue Jul 25 23:43:40 2023) ================
+(epoch: 1, iters: 1600, time: 0.001, data: 0.533) total_loss: 0.639 kl_loss: 0.031 reconstruction_loss: 0.413 confidence loss: 0.196
+(epoch: 1, iters: 3200, time: 0.001, data: 0.000) total_loss: 0.512 kl_loss: 0.035 reconstruction_loss: 0.391 confidence loss: 0.087
+(epoch: 1, iters: 4800, time: 0.003, data: 0.273) total_loss: 0.517 kl_loss: 0.022 reconstruction_loss: 0.303 confidence loss: 0.192
+(epoch: 1, iters: 6400, time: 0.002, data: 0.000) total_loss: 0.612 kl_loss: 0.028 reconstruction_loss: 0.222 confidence loss: 0.362

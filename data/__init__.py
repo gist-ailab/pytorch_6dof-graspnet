@@ -3,12 +3,15 @@ from data.base_dataset import collate_fn
 import threading
 
 
-def CreateDataset(opt):
+def CreateDataset(opt, is_train=True):
     """loads dataset class"""
 
     if opt.arch == 'vae' or opt.arch == 'gan':
-        from data.grasp_sampling_data import GraspSamplingData
-        dataset = GraspSamplingData(opt)
+        from data.grasp_sampling_data import GraspSamplingData, BimanualGraspSamplingData
+        if opt.is_bimanual:
+            dataset = BimanualGraspSamplingData(opt, is_train=is_train)
+        else:
+            dataset = GraspSamplingData(opt)
     else:
         from data.grasp_evaluator_data import GraspEvaluatorData
         dataset = GraspEvaluatorData(opt)
@@ -17,9 +20,9 @@ def CreateDataset(opt):
 
 class DataLoader:
     """multi-threaded data loading"""
-    def __init__(self, opt):
+    def __init__(self, opt, is_train=True):
         self.opt = opt
-        self.dataset = CreateDataset(opt)
+        self.dataset = CreateDataset(opt, is_train)
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
             batch_size=opt.num_objects_per_batch,

@@ -53,11 +53,14 @@ class BaseDataset(data.Dataset):
             self.all_poses = utils.uniform_quaternions()
         else:
             self.all_poses = utils.nonuniform_quaternions()
-
-        self.eval_files = [
-            json.load(open(f)) for f in glob.glob(
-                os.path.join(self.opt.dataset_root_folder, 'splits', '*.json'))
-        ]
+        
+        if opt.is_bimanual:
+            self.eval_files = []
+        else:
+            self.eval_files = [
+                json.load(open(f)) for f in glob.glob(
+                    os.path.join(self.opt.dataset_root_folder, 'splits', '*.json'))
+            ]
 
     def apply_dropout(self, pc):
         if self.opt.occlusion_nclusters == 0 or self.opt.occlusion_dropout_rate == 0.:
@@ -169,7 +172,7 @@ class BaseDataset(data.Dataset):
                 json_dict['quality_number_of_contacts'])
         except KeyError:
             heuristic_qualities = np.ones(flex_qualities.shape)
-
+       
         successful_mask = np.logical_and(flex_qualities > 0.01,
                                          heuristic_qualities > 0.01)
 
@@ -209,6 +212,7 @@ class BaseDataset(data.Dataset):
             return output_grasps, output_qualities
 
         if not return_all_grasps:
+
             positive_grasps, positive_qualities = cluster_grasps(
                 positive_grasps, positive_qualities)
             negative_grasps, negative_qualities = cluster_grasps(
@@ -234,6 +238,7 @@ class BaseDataset(data.Dataset):
         grasp_rows = np.random.choice(range(num_clusters),
                                       size=n,
                                       replace=replace).astype(np.int32)
+
         grasp_rows = [nonzero_rows[i] for i in grasp_rows]
         grasp_cols = []
         for grasp_row in grasp_rows:
@@ -318,6 +323,7 @@ class BaseDataset(data.Dataset):
                                          self.opt.splits_folder_name,
                                          split_file)))[self.opt.dataset_split]
                 ]
+
         return files
 
 
