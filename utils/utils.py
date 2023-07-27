@@ -297,12 +297,16 @@ def get_control_point_tensor(batch_size, use_torch=True, device="cpu", is_bimanu
                         control_points[1, :], control_points[-2, :],
                         control_points[-1, :]]
     else:
-        control_points[-2, 2] = control_points[-2, 2] + 0.0375
-        control_points[-1, 2] = control_points[-1, 2] + 0.0375
-        control_points = [[0, 0, 0], [0, 0, 0], control_points[0, :],
-                        control_points[1, :], control_points[-2, :],
-                        control_points[-1, :]]
-    
+        # control_points[-2, 2] = control_points[-2, 2] + 0.0375
+        # control_points[-1, 2] = control_points[-1, 2] + 0.0375
+        # control_points = [[0, 0, 0], [0, 0, 0], control_points[0, :],
+        #                 control_points[1, :], control_points[-2, :],
+        #                 control_points[-1, :]]
+
+        control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, -7.27595772e-12, 0],
+                          [-0.0425, -7.27595772e-12, 0], [0.0425, -7.27595772e-12, 0.0675],
+                          [-0.0425, -7.27595772e-12, 0.0675]]
+        
     control_points = np.asarray(control_points, dtype=np.float32)
     control_points = np.tile(np.expand_dims(control_points, 0),
                              [batch_size, 1, 1])
@@ -383,8 +387,24 @@ def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual
         shape = control_points.shape
 
         ones = np.ones((shape[0], shape[1], 1), dtype=np.float32)
-        control_points = np.concatenate((control_points, ones), -1)
+        control_points = np.concatenate((control_points, ones), -1) #(64, 6, 4)
+        control_points_trans = copy.deepcopy(control_points)
+        if is_bimanual:
+            # print(control_points)
+            # R = np.array([[1,0,0], [0,0,1], [0,-1,0]]).reshape(3,3)
+            # t = np.array([0,0,0]).reshape(3,1)
+            # T = np.r_[np.c_[R, t], np.array([[0,0,0,1]])]
+            # np.dot(control_points, T)
+            # print(control_points.shape)
+            # print('after T>>',control_points)
+            # print('-----------------------------')
+            # exit()
+            control_points_trans[:, :, 2] = -control_points[:, :, 1]
+            control_points_trans[:, :, 1] = control_points[:, :, 2]
+            control_points = control_points_trans
+
         return np.matmul(control_points, np.transpose(gt_grasps, (0, 2, 1)))
+        # return np.matmul(control_points, gt_grasps)
 
 
 def quaternion_mult(q, r):

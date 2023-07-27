@@ -9,6 +9,8 @@ import h5py
 import random
 from time import time
 from tqdm import tqdm
+import open3d as o3d
+from autolab_core import RigidTransform
 
 class GraspSamplingData(BaseDataset):
     def __init__(self, opt):
@@ -142,11 +144,16 @@ class BimanualGraspSamplingData(BaseDataset):
             selected_grasp = pos_grasps[selected_grasp_index]
             selected_quality = pos_qualities[selected_grasp_index]
             output_qualities.append(selected_quality)
+            
+            # camera_pose = np.transpose(camera_pose)
             output_grasps.append(camera_pose.dot(selected_grasp)) #(64, 4, 4)
         
         gt_control_points = utils.transform_control_points_numpy(
             np.array(output_grasps), self.opt.num_grasps_per_object, mode='rt', is_bimanual=self.opt.is_bimanual) #(64, 6, 4)
 
+        
+        
+        
         meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
         meta['grasp_rt'] = np.array(output_grasps).reshape(
             len(output_grasps), -1)
@@ -205,13 +212,18 @@ class BimanualGraspSamplingData(BaseDataset):
         mesh_scale = h5_file['object/scale'][()]
         # load and rescale, translate object mesh
         object_model = Object(os.path.join(root_folder, mesh_root, mesh_fname))
+        # object_model.rescale(mesh_scale)
+        # object_model = object_model.mesh
+        # object_mean = np.mean(object_model.vertices, 0, keepdims=1)
+        # object_model.vertices -= object_mean
+
+        object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
         object_model.rescale(mesh_scale)
-        object_model = object_model.mesh
-        object_mean = np.mean(object_model.vertices, 0, keepdims=1)
-        object_model.vertices -= object_mean
+        object_mean = object_model.mesh.centroid
+        object_model = object_model.mesh        
         # load bimanual grasp
-        grasps = np.asarray(h5_file['grasps/transforms'])
-        grasps[:, :, :3, 3] -= object_mean
+        # grasps = np.asarray(h5_file['grasps/transforms'])
+        # grasps[:, :, :3, 3] -= object_mean
         
         # scale each grasp quality and sum them up
         # force_closure = np.array(h5_file["grasps/qualities/Force_closure"])
@@ -228,6 +240,7 @@ class BimanualGraspSamplingData(BaseDataset):
         # filter bimanual grasp to unique single grasp and corresponding quality
         # single_grasp, single_grasp_quality = self.filter_single_grasp(sum_quality, grasps)
         single_grasp = np.array(h5_file["grasps/single_grasps"])
+
         single_grasp[:, :3, 3] -= object_mean
         single_grasp_quality = np.array(h5_file["grasps/single_grasps_quality"])
 

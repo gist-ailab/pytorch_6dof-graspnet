@@ -114,10 +114,28 @@ class BaseDataset(data.Dataset):
         pc = utils.regularize_pc_point_count(pc, self.opt.npoints)
         pc_mean = np.mean(pc, 0, keepdims=True)
         pc[:, :3] -= pc_mean[:, :3]
+        ###########* change camera pose *###########
+        # camera_pose[:3, 1] =- camera_pose[:3, 1]
+        # camera_pose[:3, 2] =- camera_pose[:3, 2]
+        # camera_pose = self.inverse_transform(camera_pose)
+        ###############*
+        
         camera_pose[:3, 3] -= pc_mean[0, :3]
-
         return pc, camera_pose, in_camera_pose
 
+    def inverse_transform(self, trans):
+        rot = trans[:3, :3]
+        t = trans[:3, 3]
+        rot = np.transpose(rot)
+        t = -np.matmul(rot, t)
+        output = np.zeros((4, 4), dtype=np.float32)
+        output[3][3] = 1
+        output[:3, :3] = rot
+        output[:3, 3] = t
+
+        return output
+
+    
     def change_object(self, cad_path, cad_scale):
         self.renderer.change_object(cad_path, cad_scale)
 
