@@ -390,15 +390,7 @@ def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual
         control_points = np.concatenate((control_points, ones), -1) #(64, 6, 4)
         control_points_trans = copy.deepcopy(control_points)
         if is_bimanual:
-            # print(control_points)
-            # R = np.array([[1,0,0], [0,0,1], [0,-1,0]]).reshape(3,3)
-            # t = np.array([0,0,0]).reshape(3,1)
-            # T = np.r_[np.c_[R, t], np.array([[0,0,0,1]])]
-            # np.dot(control_points, T)
-            # print(control_points.shape)
-            # print('after T>>',control_points)
-            # print('-----------------------------')
-            # exit()
+            # should change x,y,z to x,-z,y because of the coordinate system
             control_points_trans[:, :, 2] = -control_points[:, :, 1]
             control_points_trans[:, :, 1] = control_points[:, :, 2]
             control_points = control_points_trans
