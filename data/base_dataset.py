@@ -123,7 +123,9 @@ class BaseDataset(data.Dataset):
 
     def read_grasp_file(self, path, return_all_grasps=False):
         file_name = path
-        if self.caching and file_name in self.cache:
+
+        if self.caching and file_name in self.cache.keys():
+            # print(2222222222222222222222222222)
             pos_grasps, pos_qualities, neg_grasps, neg_qualities, cad, cad_path, cad_scale = copy.deepcopy(
                 self.cache[file_name])
             return pos_grasps, pos_qualities, neg_grasps, neg_qualities, cad, cad_path, cad_scale
@@ -136,8 +138,10 @@ class BaseDataset(data.Dataset):
         if self.caching:
             self.cache[file_name] = (pos_grasps, pos_qualities, neg_grasps,
                                      neg_qualities, cad, cad_path, cad_scale)
+            # print(len(self.cache.keys()))
+            # print(11111111111111111111)
             return copy.deepcopy(self.cache[file_name])
-
+        
         return pos_grasps, pos_qualities, neg_grasps, neg_qualities, cad, cad_path, cad_scale
 
     def read_object_grasp_data(self,

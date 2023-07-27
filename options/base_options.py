@@ -185,6 +185,11 @@ class BaseOptions:
             type=bool,
             default=False,
         )
+        self.parser.add_argument(
+            '--is_bimanual_v2',
+            type=bool,
+            default=False,
+        )
         
     def parse(self):
         if not self.initialized:
@@ -233,6 +238,8 @@ class BaseOptions:
                 name += "_latent_size_" + str(self.opt.latent_size)
             if self.opt.is_bimanual:
                 name += "_bimanual"
+            if self.opt.is_bimanual_v2:
+                name += "_bimanual_v2"
 
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)

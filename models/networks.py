@@ -73,7 +73,7 @@ def define_classifier(opt, gpu_ids, arch, init_type, init_gain, device):
     net = None
     if arch == 'vae':
         net = GraspSamplerVAE(opt.model_scale, opt.pointnet_radius,
-                              opt.pointnet_nclusters, opt.latent_size, device)
+                              opt.pointnet_nclusters, opt.latent_size, device, opt.is_bimanual_v2)
     elif arch == 'gan':
         net = GraspSamplerGAN(opt.model_scale, opt.pointnet_radius,
                               opt.pointnet_nclusters, opt.latent_size, device)
@@ -107,28 +107,46 @@ class GraspSampler(nn.Module):
         self.device = device
 
     def create_decoder(self, model_scale, pointnet_radius, pointnet_nclusters,
-                       num_input_features):
+                       num_input_features, is_bimanual_v2):
         # The number of input features for the decoder is 3+latent space where 3
         # represents the x, y, z position of the point-cloud
+        if not is_bimanual_v2:
+            self.decoder = base_network(pointnet_radius, pointnet_nclusters,
+                                        model_scale, num_input_features)
+            self.q = nn.Linear(model_scale * 1024, 4)
+            self.t = nn.Linear(model_scale * 1024, 3)
+            self.confidence = nn.Linear(model_scale * 1024, 1)
+        else:
+            self.decoder = base_network(pointnet_radius, pointnet_nclusters,
+                                        model_scale, num_input_features)
+            self.q1 = nn.Linear(model_scale * 1024, 4)
+            self.t1 = nn.Linear(model_scale * 1024, 3)
+            self.q2 = nn.Linear(model_scale * 1024, 4)
+            self.t2 = nn.Linear(model_scale * 1024, 3)
+            self.confidence = nn.Linear(model_scale * 1024, 1)
+            
+    def decode(self, xyz, z, is_bimanual_v2=False):
+        if not is_bimanual_v2:
+            xyz_features = self.concatenate_z_with_pc(xyz,z).transpose(-1,1).contiguous()
+            for module in self.decoder[0]:
+                xyz, xyz_features = module(xyz, xyz_features)
+            x = self.decoder[1](xyz_features.squeeze(-1))
+            predicted_qt = torch.cat(
+                (F.normalize(self.q(x), p=2, dim=-1), self.t(x)), -1)
+            return predicted_qt, torch.sigmoid(self.confidence(x)).squeeze()
+        else:
+            xyz_features = self.concatenate_z_with_pc(xyz,z).transpose(-1,1).contiguous()
+            for module in self.decoder[0]:
+                xyz, xyz_features = module(xyz, xyz_features)
+            x = self.decoder[1](xyz_features.squeeze(-1))
+            predicted_qt1 = torch.cat((F.normalize(self.q1(x), p=2, dim=-1), self.t1(x)), -1)
+            predicted_qt2 = torch.cat((F.normalize(self.q2(x), p=2, dim=-1), self.t2(x)), -1)
+            predicted_qt = torch.cat((predicted_qt1.unsqueeze(0), predicted_qt2.unsqueeze(0)), dim=0)
+            predicted_qt = torch.transpose(predicted_qt, 0, 1)
 
-        self.decoder = base_network(pointnet_radius, pointnet_nclusters,
-                                    model_scale, num_input_features)
-        self.q = nn.Linear(model_scale * 1024, 4)
-        self.t = nn.Linear(model_scale * 1024, 3)
-        self.confidence = nn.Linear(model_scale * 1024, 1)
+            return predicted_qt, torch.sigmoid(self.confidence(x)).squeeze()
 
-    def decode(self, xyz, z):
-        xyz_features = self.concatenate_z_with_pc(xyz,
-                                                  z).transpose(-1,
-                                                               1).contiguous()
-        for module in self.decoder[0]:
-            xyz, xyz_features = module(xyz, xyz_features)
-        x = self.decoder[1](xyz_features.squeeze(-1))
-        predicted_qt = torch.cat(
-            (F.normalize(self.q(x), p=2, dim=-1), self.t(x)), -1)
-
-        return predicted_qt, torch.sigmoid(self.confidence(x)).squeeze()
-
+        
     def concatenate_z_with_pc(self, pc, z):
         z.unsqueeze_(1)
         z = z.expand(-1, pc.shape[1], -1)
@@ -146,24 +164,30 @@ class GraspSamplerVAE(GraspSampler):
                  pointnet_radius=0.02,
                  pointnet_nclusters=128,
                  latent_size=2,
-                 device="cpu"):
+                 device="cpu",
+                 is_bimanual_v2=False):
         super(GraspSamplerVAE, self).__init__(latent_size, device)
+        self.is_bimanual_v2 = is_bimanual_v2
         self.create_encoder(model_scale, pointnet_radius, pointnet_nclusters)
 
         self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
-                            latent_size + 3)
+                            latent_size + 3, self.is_bimanual_v2)
         self.create_bottleneck(model_scale * 1024, latent_size)
-
+        
+        
     def create_encoder(
             self,
             model_scale,
             pointnet_radius,
-            pointnet_nclusters,
-    ):
+            pointnet_nclusters):
         # The number of input features for the encoder is 19: the x, y, z
         # position of the point-cloud and the flattened 4x4=16 grasp pose matrix
-        self.encoder = base_network(pointnet_radius, pointnet_nclusters,
-                                    model_scale, 19)
+        if self.is_bimanual_v2:
+            self.encoder = base_network(pointnet_radius, pointnet_nclusters, 
+                                        model_scale, 35)
+        else:
+            self.encoder = base_network(pointnet_radius, pointnet_nclusters,
+                                        model_scale, 19)
 
     def create_bottleneck(self, input_size, latent_size):
         mu = nn.Linear(input_size, latent_size)
@@ -193,19 +217,22 @@ class GraspSamplerVAE(GraspSampler):
         input_features = torch.cat(
             (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
             -1).transpose(-1, 1).contiguous()
-        z = self.encode(pc, input_features)
+
+        z = self.encode(pc, input_features) #(64, 1024)
+
         mu, logvar = self.bottleneck(z)
         z = self.reparameterize(mu, logvar)
-        qt, confidence = self.decode(pc, z)
+        qt, confidence = self.decode(pc, z, self.is_bimanual_v2)
         return qt, confidence, mu, logvar
-
+            
     def forward_test(self, pc, grasp):
         input_features = torch.cat(
             (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
             -1).transpose(-1, 1).contiguous()
         z = self.encode(pc, input_features)
         mu, _ = self.bottleneck(z)
-        qt, confidence = self.decode(pc, mu)
+        qt, confidence = self.decode(pc, mu, self.is_bimanual_v2)
+            
         return qt, confidence
 
     def sample_latent(self, batch_size):

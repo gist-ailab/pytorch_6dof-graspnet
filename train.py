@@ -10,8 +10,12 @@ import numpy as np
 import warnings
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
 
+import os
+# os.environ['CUDA_VISIBLE_DEVICES'] = '0,4,5'
+
 def main():
     opt = TrainOptions().parse()
+
     if opt == None:
         return
 
@@ -24,6 +28,7 @@ def main():
     model = create_model(opt)
     writer = Writer(opt)
     total_steps = 0
+
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):
         epoch_start_time = time.time()
         iter_data_time = time.time()

@@ -4,3 +4,4 @@
 /Manifold
 /Pointnet2_PyTorch
 /*.tar.gz
+/checkpoints
