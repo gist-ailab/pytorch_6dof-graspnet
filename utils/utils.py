@@ -291,6 +291,8 @@ def get_control_point_tensor(batch_size, use_torch=True, device="cpu"):
       use_tf: switches between outputing a tensor and outputing a numpy array.
     """
     control_points = np.load('./gripper_control_points/panda.npy')[:, :3]
+    print(control_points)
+    exit()
     control_points = [[0, 0, 0], [0, 0, 0], control_points[0, :],
                       control_points[1, :], control_points[-2, :],
                       control_points[-1, :]]

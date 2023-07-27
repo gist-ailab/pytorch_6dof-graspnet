@@ -7,13 +7,12 @@ blacklisted_categories: ''
 checkpoints_dir: ./checkpoints
 confidence_weight: 1.0
 continue_train: false
-dataset_root_folder: da2_dataset/
+dataset_root_folder: da2_dataset
 dataset_split: train
 depth_noise: 0.0
 epoch_count: 1
 gpu_ids:
-- 4
-- 5
+- 0
 grasps_folder_name: grasps
 grasps_ratio: 1.0
 gripper: panda
@@ -39,7 +38,7 @@ npoints: 1024
 num_grasp_clusters: 32
 num_grasps_per_object: 64
 num_objects_per_batch: 1
-num_threads: 16
+num_threads: 3
 occlusion_dropout_rate: 0
 occlusion_nclusters: 0
 phase: train
