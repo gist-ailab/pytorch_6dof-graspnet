@@ -2545,3 +2545,154 @@ epoch: 853, TEST REC LOSS: [9.1271]
 ================ Testing Acc (Thu Jul 27 13:53:26 2023) ================
 epoch: 854, TEST REC LOSS: [9.0183]
 
+================ Testing Acc (Thu Jul 27 13:54:06 2023) ================
+epoch: 855, TEST REC LOSS: [9.109]
+
+================ Testing Acc (Thu Jul 27 13:54:54 2023) ================
+epoch: 856, TEST REC LOSS: [6.9425]
+
+================ Testing Acc (Thu Jul 27 13:55:39 2023) ================
+epoch: 857, TEST REC LOSS: [9.1057]
+
+================ Testing Acc (Thu Jul 27 13:56:22 2023) ================
+epoch: 858, TEST REC LOSS: [9.0264]
+
+================ Testing Acc (Thu Jul 27 13:57:07 2023) ================
+epoch: 859, TEST REC LOSS: [9.1258]
+
+================ Testing Acc (Thu Jul 27 13:57:51 2023) ================
+epoch: 860, TEST REC LOSS: [9.1265]
+
+================ Testing Acc (Thu Jul 27 13:58:36 2023) ================
+epoch: 861, TEST REC LOSS: [9.1463]
+
+================ Testing Acc (Thu Jul 27 13:59:25 2023) ================
+epoch: 862, TEST REC LOSS: [8.3607]
+
+================ Testing Acc (Thu Jul 27 14:00:09 2023) ================
+epoch: 863, TEST REC LOSS: [8.9187]
+
+================ Testing Acc (Thu Jul 27 14:00:57 2023) ================
+epoch: 864, TEST REC LOSS: [9.0899]
+
+================ Testing Acc (Thu Jul 27 14:01:44 2023) ================
+epoch: 865, TEST REC LOSS: [8.6095]
+
+================ Testing Acc (Thu Jul 27 14:02:30 2023) ================
+epoch: 866, TEST REC LOSS: [8.7845]
+
+================ Testing Acc (Thu Jul 27 14:03:16 2023) ================
+epoch: 867, TEST REC LOSS: [9.1235]
+
+================ Testing Acc (Thu Jul 27 14:03:57 2023) ================
+epoch: 868, TEST REC LOSS: [9.0287]
+
+================ Testing Acc (Thu Jul 27 14:04:43 2023) ================
+epoch: 869, TEST REC LOSS: [9.0463]
+
+================ Testing Acc (Thu Jul 27 14:05:26 2023) ================
+epoch: 870, TEST REC LOSS: [9.3005]
+
+================ Testing Acc (Thu Jul 27 14:06:09 2023) ================
+epoch: 871, TEST REC LOSS: [9.1835]
+
+================ Testing Acc (Thu Jul 27 14:06:54 2023) ================
+epoch: 872, TEST REC LOSS: [9.1322]
+
+================ Testing Acc (Thu Jul 27 14:07:37 2023) ================
+epoch: 873, TEST REC LOSS: [9.1547]
+
+================ Testing Acc (Thu Jul 27 14:08:23 2023) ================
+epoch: 874, TEST REC LOSS: [9.1109]
+
+================ Testing Acc (Thu Jul 27 14:09:04 2023) ================
+epoch: 875, TEST REC LOSS: [9.1397]
+
+================ Testing Acc (Thu Jul 27 14:09:57 2023) ================
+epoch: 876, TEST REC LOSS: [9.2045]
+
+================ Testing Acc (Thu Jul 27 14:10:39 2023) ================
+epoch: 877, TEST REC LOSS: [9.282]
+
+================ Testing Acc (Thu Jul 27 14:11:21 2023) ================
+epoch: 878, TEST REC LOSS: [5.4229]
+
+================ Testing Acc (Thu Jul 27 14:11:59 2023) ================
+epoch: 879, TEST REC LOSS: [9.1326]
+
+================ Testing Acc (Thu Jul 27 14:12:43 2023) ================
+epoch: 880, TEST REC LOSS: [9.1589]
+
+================ Testing Acc (Thu Jul 27 14:13:28 2023) ================
+epoch: 881, TEST REC LOSS: [9.0994]
+
+================ Testing Acc (Thu Jul 27 14:14:15 2023) ================
+epoch: 882, TEST REC LOSS: [9.1476]
+
+================ Testing Acc (Thu Jul 27 14:14:59 2023) ================
+epoch: 883, TEST REC LOSS: [9.1459]
+
+================ Testing Acc (Thu Jul 27 14:15:44 2023) ================
+epoch: 884, TEST REC LOSS: [9.1135]
+
+================ Testing Acc (Thu Jul 27 14:16:32 2023) ================
+epoch: 885, TEST REC LOSS: [9.15]
+
+================ Testing Acc (Thu Jul 27 14:17:12 2023) ================
+epoch: 886, TEST REC LOSS: [9.1747]
+
+================ Testing Acc (Thu Jul 27 14:17:56 2023) ================
+epoch: 887, TEST REC LOSS: [9.1129]
+
+================ Testing Acc (Thu Jul 27 14:18:42 2023) ================
+epoch: 888, TEST REC LOSS: [9.1133]
+
+================ Testing Acc (Thu Jul 27 14:19:28 2023) ================
+epoch: 889, TEST REC LOSS: [9.3046]
+
+================ Testing Acc (Thu Jul 27 14:20:12 2023) ================
+epoch: 890, TEST REC LOSS: [9.1624]
+
+================ Testing Acc (Thu Jul 27 14:20:56 2023) ================
+epoch: 891, TEST REC LOSS: [9.5838]
+
+================ Testing Acc (Thu Jul 27 14:21:38 2023) ================
+epoch: 892, TEST REC LOSS: [9.0642]
+
+================ Testing Acc (Thu Jul 27 14:22:30 2023) ================
+epoch: 893, TEST REC LOSS: [8.5468]
+
+================ Testing Acc (Thu Jul 27 14:23:13 2023) ================
+epoch: 894, TEST REC LOSS: [9.0903]
+
+================ Testing Acc (Thu Jul 27 14:24:01 2023) ================
+epoch: 895, TEST REC LOSS: [9.0966]
+
+================ Testing Acc (Thu Jul 27 14:24:45 2023) ================
+epoch: 896, TEST REC LOSS: [9.0932]
+
+================ Testing Acc (Thu Jul 27 14:25:30 2023) ================
+epoch: 897, TEST REC LOSS: [9.1102]
+
+================ Testing Acc (Thu Jul 27 14:26:19 2023) ================
+epoch: 898, TEST REC LOSS: [9.2423]
+
+================ Testing Acc (Thu Jul 27 14:27:07 2023) ================
+epoch: 899, TEST REC LOSS: [9.1424]
+
+================ Testing Acc (Thu Jul 27 14:27:54 2023) ================
+epoch: 900, TEST REC LOSS: [9.1503]
+
+================ Testing Acc (Thu Jul 27 14:28:38 2023) ================
+epoch: 901, TEST REC LOSS: [9.1572]
+
+================ Testing Acc (Thu Jul 27 14:29:26 2023) ================
+epoch: 902, TEST REC LOSS: [0.72112]
+
+================ Testing Acc (Thu Jul 27 14:30:12 2023) ================
+epoch: 903, TEST REC LOSS: [9.1234]
+
+================ Testing Acc (Thu Jul 27 14:30:58 2023) ================
+epoch: 904, TEST REC LOSS: [8.5075]
+
+================ Testing Acc (Thu Jul 27 14:31:41 2023) ================

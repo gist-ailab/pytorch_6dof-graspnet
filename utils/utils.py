@@ -285,15 +285,24 @@ def get_gripper_pc(batch_size, npoints, use_torch=True):
     return output
 
 
-def get_control_point_tensor(batch_size, use_torch=True, device="cpu"):
+def get_control_point_tensor(batch_size, use_torch=True, device="cpu", is_bimanual=False):
     """
       Outputs a tensor of shape (batch_size x 6 x 3).
       use_tf: switches between outputing a tensor and outputing a numpy array.
     """
+    
     control_points = np.load('./gripper_control_points/panda.npy')[:, :3]
-    control_points = [[0, 0, 0], [0, 0, 0], control_points[0, :],
-                      control_points[1, :], control_points[-2, :],
-                      control_points[-1, :]]
+    if not is_bimanual:
+        control_points = [[0, 0, 0], [0, 0, 0], control_points[0, :],
+                        control_points[1, :], control_points[-2, :],
+                        control_points[-1, :]]
+    else:
+        control_points[-2, 2] = control_points[-2, 2] + 0.0375
+        control_points[-1, 2] = control_points[-1, 2] + 0.0375
+        control_points = [[0, 0, 0], [0, 0, 0], control_points[0, :],
+                        control_points[1, :], control_points[-2, :],
+                        control_points[-1, :]]
+    
     control_points = np.asarray(control_points, dtype=np.float32)
     control_points = np.tile(np.expand_dims(control_points, 0),
                              [batch_size, 1, 1])
@@ -341,7 +350,7 @@ def transform_control_points(gt_grasps, batch_size, mode='qt', device="cpu"):
         return torch.matmul(control_points, gt_grasps.permute(0, 2, 1))
 
 
-def transform_control_points_numpy(gt_grasps, batch_size, mode='qt'):
+def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual=False):
     """
       Transforms canonical points using gt_grasps.
       mode = 'qt' expects gt_grasps to have (batch_size x 7) where each 
@@ -370,7 +379,7 @@ def transform_control_points_numpy(gt_grasps, batch_size, mode='qt'):
     else:
         assert (len(grasp_shape) == 3), grasp_shape
         assert (grasp_shape[1] == 4 and grasp_shape[2] == 4), grasp_shape
-        control_points = get_control_point_tensor(batch_size, use_torch=False)
+        control_points = get_control_point_tensor(batch_size, use_torch=False, is_bimanual=is_bimanual)
         shape = control_points.shape
 
         ones = np.ones((shape[0], shape[1], 1), dtype=np.float32)

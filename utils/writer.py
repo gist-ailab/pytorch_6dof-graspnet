@@ -54,7 +54,7 @@ class Writer:
             message = '(epoch: %d, iters: %d, time: %.3f, data: %.3f)' \
                     % (epoch, i, t, t_data)
             for (loss_type, loss_value) in zip(loss_types, losses):
-                message += ' %s: %.3f' % (loss_type, loss_value.item())
+                message += ' %s: %.6f' % (loss_type, loss_value.item())
         else:
             message = '(epoch: %d, iters: %d, time: %.3f, data: %.3f) loss: %.3f ' \
                     % (epoch, i, t, t_data, losses.item())

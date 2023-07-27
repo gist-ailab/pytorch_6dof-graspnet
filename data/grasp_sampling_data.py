@@ -111,9 +111,9 @@ class BimanualGraspSamplingData(BaseDataset):
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
         
         if not self.is_train:
-            files = files[3315:]
+            files = files[200:250]
         else:
-            files = files[:3315]
+            files = files[:200]
 
         return files
     
@@ -144,7 +144,7 @@ class BimanualGraspSamplingData(BaseDataset):
             output_grasps.append(camera_pose.dot(selected_grasp)) #(64, 4, 4)
         
         gt_control_points = utils.transform_control_points_numpy(
-            np.array(output_grasps), self.opt.num_grasps_per_object, mode='rt') #(64, 6, 4)
+            np.array(output_grasps), self.opt.num_grasps_per_object, mode='rt', is_bimanual=self.opt.is_bimanual) #(64, 6, 4)
 
         meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
         meta['grasp_rt'] = np.array(output_grasps).reshape(
@@ -213,20 +213,21 @@ class BimanualGraspSamplingData(BaseDataset):
         grasps[:, :, :3, 3] -= object_mean
         
         # scale each grasp quality and sum them up
-        force_closure = np.array(h5_file["grasps/qualities/Force_closure"])
-        torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
-        dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
+        # force_closure = np.array(h5_file["grasps/qualities/Force_closure"])
+        # torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
+        # dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
         
-        force_closure_weight = 0.4
-        torque_optimization_weight = 0.5
-        dexterity_weight = 0.1
+        # force_closure_weight = 0.4
+        # torque_optimization_weight = 0.5
+        # dexterity_weight = 0.1
         
-        sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
-                        dexterity_weight * dexterity
+        # sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
+        #                 dexterity_weight * dexterity
         
         # filter bimanual grasp to unique single grasp and corresponding quality
         # single_grasp, single_grasp_quality = self.filter_single_grasp(sum_quality, grasps)
         single_grasp = np.array(h5_file["grasps/single_grasps"])
+        single_grasp[:, :3, 3] -= object_mean
         single_grasp_quality = np.array(h5_file["grasps/single_grasps_quality"])
 
         return single_grasp, single_grasp_quality, object_model, os.path.join(root_folder, mesh_root, mesh_fname), mesh_scale
