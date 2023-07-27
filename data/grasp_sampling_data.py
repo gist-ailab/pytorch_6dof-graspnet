@@ -31,6 +31,7 @@ class GraspSamplingData(BaseDataset):
         pos_grasps, pos_qualities, _, _, _, cad_path, cad_scale = self.read_grasp_file(
             path)
         meta = {}
+        # print(meta)
         try:
             all_clusters = self.sample_grasp_indexes(
                 self.opt.num_grasps_per_object, pos_grasps, pos_qualities)
