@@ -48,7 +48,7 @@ print_freq: 100
 run_test_freq: 1
 save_epoch_freq: 1
 save_latest_freq: 250
-seed: null
+seed: 7
 serial_batches: false
 skip_error: false
 splits_folder_name: splits

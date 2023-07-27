@@ -6,6 +6,7 @@ from utils.writer import Writer
 from test import run_test
 import threading
 import numpy as np
+import open3d as o3d
 
 import warnings
 warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
@@ -30,10 +31,36 @@ def main():
     total_steps = 0
 
     for epoch in range(opt.epoch_count, opt.niter + opt.niter_decay + 1):
+        
         epoch_start_time = time.time()
         iter_data_time = time.time()
         epoch_iter = 0
         for i, data in enumerate(dataset):
+            
+            ##############*data visualization*################
+            # print(pc.shape)
+            # print(data['pc'].device)
+            # print(data['pc'].shape)
+            # print(data['cad_path'])
+            # pcd_object = o3d.geometry.PointCloud()
+            # pcd_object.points = o3d.utility.Vector3dVector(data['pc'][0])
+            
+            # target_cps = data['target_cps']
+            # target_cps_list = []
+            
+            # for i in range(len(target_cps)):
+            #     cps = target_cps[i]
+            #     pcd_target_cps = o3d.geometry.PointCloud()
+            #     pcd_target_cps.points = o3d.utility.Vector3dVector(cps)
+            #     pcd_target_cps.paint_uniform_color([0, 0, 0])
+            #     target_cps_list.append(pcd_target_cps)
+            # # for i in range(len(target_cps)):
+            # #     o3d.visualization.draw_geometries([pcd_object]+[target_cps_list[i]])
+            # o3d.visualization.draw_geometries([pcd_object]+target_cps_list)
+            
+            # exit()
+            
+            ################*
             
             iter_start_time = time.time()
             if total_steps % opt.print_freq == 0:
