@@ -6,7 +6,7 @@ beta1: 0.9
 blacklisted_categories: ''
 checkpoints_dir: ./checkpoints
 confidence_weight: 1.0
-continue_train: false
+continue_train: true
 dataset_root_folder: unified_grasp_data
 dataset_split: train
 depth_noise: 0.0
@@ -20,6 +20,7 @@ gripper_pc_npoints: -1
 init_gain: 0.02
 init_type: normal
 is_bimanual: false
+is_bimanual_v2: false
 is_train: true
 kl_loss_weight: 0.01
 latent_size: 2
@@ -37,7 +38,7 @@ npoints: 1024
 num_grasp_clusters: 32
 num_grasps_per_object: 64
 num_objects_per_batch: 1
-num_threads: 3
+num_threads: 8
 occlusion_dropout_rate: 0
 occlusion_nclusters: 0
 phase: train

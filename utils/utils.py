@@ -57,7 +57,9 @@ def farthest_points(data,
             shape[i] = 1
 
         broadcasted_data = np.tile(np.expand_dims(data[index], 0), shape)
+
         new_distances = dist_func(broadcasted_data, data)
+
         distances = np.minimum(distances, new_distances)
         clusters[distances == new_distances] = iter
         if verbose:
@@ -80,6 +82,10 @@ def distance_by_translation_grasp(p1, p2):
     t1 = p1[:, :3, 3]
     t2 = p2[:, :3, 3]
     return np.sqrt(np.sum(np.square(t1 - t2), axis=-1))
+
+# def distance_by_translation_bimanual_grasp(p1, p2):
+    
+#     t1 = p1[:,]
 
 
 def distance_by_translation_point(p1, p2):

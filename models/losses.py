@@ -42,14 +42,25 @@ def control_point_l1_loss(pred_control_points,
                           gt_control_points,
                           confidence=None,
                           confidence_weight=None,
-                          device="cpu"):
+                          device="cpu",
+                          is_bimanual_v2=False):
     """
       Computes the l1 loss between the predicted control points and the
       groundtruth control points on the gripper.
     """
     #print('control_point_l1_loss', pred_control_points.shape,
     #      gt_control_points.shape)
-    error = torch.sum(torch.abs(pred_control_points - gt_control_points), -1)
+    if not is_bimanual_v2:
+        error = torch.sum(torch.abs(pred_control_points - gt_control_points), -1)
+        # print(gt_control_points.shape)
+        # print(pred_control_points.shape)
+        # exit()
+    else:
+        # print(pred_control_points.shape)
+        error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1)
+        error2 = torch.sum(torch.abs(pred_control_points[1] - gt_control_points[1]), -1)
+        error = error1 + error2
+    
     error = torch.mean(error, -1)
     if confidence is not None:
         assert (confidence_weight is not None)
@@ -65,7 +76,6 @@ def control_point_l1_loss(pred_control_points,
         return torch.mean(error)
     else:
         return torch.mean(error), -confidence_term
-
 
 def classification_with_confidence_loss(pred_logit,
                                         gt,

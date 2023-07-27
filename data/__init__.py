@@ -7,9 +7,11 @@ def CreateDataset(opt, is_train=True):
     """loads dataset class"""
 
     if opt.arch == 'vae' or opt.arch == 'gan':
-        from data.grasp_sampling_data import GraspSamplingData, BimanualGraspSamplingData
+        from data.grasp_sampling_data import GraspSamplingData, BimanualGraspSamplingData, BimanualGraspSamplingDataV2
         if opt.is_bimanual:
             dataset = BimanualGraspSamplingData(opt, is_train=is_train)
+        elif opt.is_bimanual_v2:
+            dataset = BimanualGraspSamplingDataV2(opt, is_train=is_train)
         else:
             dataset = GraspSamplingData(opt)
     else:
@@ -36,5 +38,6 @@ class DataLoader:
     def __iter__(self):
         for i, data in enumerate(self.dataloader):
             if i * self.opt.batch_size >= self.opt.max_dataset_size:
+                print('reached max dataset size')
                 break
             yield data
