@@ -95,7 +95,7 @@ class GraspNetModel:
                 predicted_cp, confidence, mu, logvar = out
                 
                 predicted_cp = utils.transform_control_points(
-                    predicted_cp, predicted_cp.shape[0], device=self.device)# (64, 6, 3)
+                    predicted_cp, predicted_cp.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]# (64, 6, 3)
 
                 self.reconstruction_loss, self.confidence_loss = self.criterion[1](
                     predicted_cp,
@@ -109,9 +109,9 @@ class GraspNetModel:
                 if len(self.opt.gpu_ids) > 1:
                     predicted_cp = torch.transpose(predicted_cp, 0, 1)
                 predicted_cp1 = utils.transform_control_points(
-                    predicted_cp[0], predicted_cp[0].shape[0], device=self.device)
+                    predicted_cp[0], predicted_cp[0].shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
                 predicted_cp2 = utils.transform_control_points(
-                    predicted_cp[1], predicted_cp[1].shape[0], device=self.device)
+                    predicted_cp[1], predicted_cp[1].shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
                 predicted_cp = torch.cat([predicted_cp1.unsqueeze(0), predicted_cp2.unsqueeze(0)], dim=0)# (2, 64, 6, 3)
                 predicted_cp = predicted_cp.to(device=self.device)
                 self.reconstruction_loss, self.confidence_loss = self.criterion[1](
@@ -198,18 +198,49 @@ class GraspNetModel:
         lr = self.optimizer.param_groups[0]['lr']
         print('learning rate = %.7f' % lr)
 
-    def test(self):
+    def test(self, vis=False):
         """tests model
         returns: number correct and total number
         """
         with torch.no_grad():
             out = self.forward()
             prediction, confidence = out
-            if self.opt.arch == "vae":
-                if not self.opt.is_bimanual_v2:
+            if vis:
+                if self.opt.arch == 'vae':
+                    predicted_cp = utils.transform_control_points(
+                        prediction, prediction.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)
+                    return predicted_cp[:,:,:3], self.targets, confidence
+                
+            else:    
+                if self.opt.arch == "vae":
+                    if not self.opt.is_bimanual_v2:
+                        predicted_cp = utils.transform_control_points(
+                            prediction, prediction.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
+                        reconstruction_loss, _ = self.criterion[1](
+                            predicted_cp,
+                            self.targets,
+                            confidence=confidence,
+                            confidence_weight=self.opt.confidence_weight,
+                            device=self.device)
+                        return reconstruction_loss, 1
+                    else:
+                        predicted_cp1 = utils.transform_control_points(
+                        prediction[0], prediction[0].shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
+                        predicted_cp2 = utils.transform_control_points(
+                            prediction[1], prediction[1].shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
+                        predicted_cp = torch.cat([predicted_cp1.unsqueeze(0), predicted_cp2.unsqueeze(0)], dim=0)# (2, 64, 6, 3)
+                        reconstruction_loss, _ = self.criterion[1](
+                            predicted_cp,
+                            self.targets,
+                            confidence=confidence,
+                            confidence_weight=self.opt.confidence_weight,
+                            device=self.device,
+                            is_bimanual_v2=self.opt.is_bimanual_v2)
+                        return reconstruction_loss, 1
+                elif self.opt.arch == "gan":
                     predicted_cp = utils.transform_control_points(
                         prediction, prediction.shape[0], device=self.device)
-                    reconstruction_loss, _ = self.criterion[1](
+                    reconstruction_loss, _ = self.criterion(
                         predicted_cp,
                         self.targets,
                         confidence=confidence,
@@ -217,31 +248,7 @@ class GraspNetModel:
                         device=self.device)
                     return reconstruction_loss, 1
                 else:
-                    predicted_cp1 = utils.transform_control_points(
-                    prediction[0], prediction[0].shape[0], device=self.device)
-                    predicted_cp2 = utils.transform_control_points(
-                        prediction[1], prediction[1].shape[0], device=self.device)
-                    predicted_cp = torch.cat([predicted_cp1.unsqueeze(0), predicted_cp2.unsqueeze(0)], dim=0)# (2, 64, 6, 3)
-                    reconstruction_loss, _ = self.criterion[1](
-                        predicted_cp,
-                        self.targets,
-                        confidence=confidence,
-                        confidence_weight=self.opt.confidence_weight,
-                        device=self.device,
-                        is_bimanual_v2=self.opt.is_bimanual_v2)
-                    return reconstruction_loss, 1
-            elif self.opt.arch == "gan":
-                predicted_cp = utils.transform_control_points(
-                    prediction, prediction.shape[0], device=self.device)
-                reconstruction_loss, _ = self.criterion(
-                    predicted_cp,
-                    self.targets,
-                    confidence=confidence,
-                    confidence_weight=self.opt.confidence_weight,
-                    device=self.device)
-                return reconstruction_loss, 1
-            else:
 
-                predicted = torch.round(torch.sigmoid(prediction)).squeeze()
-                correct = (predicted == self.targets).sum().item()
-                return correct, len(self.targets)
+                    predicted = torch.round(torch.sigmoid(prediction)).squeeze()
+                    correct = (predicted == self.targets).sum().item()
+                    return correct, len(self.targets)

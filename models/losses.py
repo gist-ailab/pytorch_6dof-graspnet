@@ -52,9 +52,7 @@ def control_point_l1_loss(pred_control_points,
     #      gt_control_points.shape)
     if not is_bimanual_v2:
         error = torch.sum(torch.abs(pred_control_points - gt_control_points), -1)
-        # print(gt_control_points.shape)
-        # print(pred_control_points.shape)
-        # exit()
+
     else:
         # print(pred_control_points.shape)
         error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1)
