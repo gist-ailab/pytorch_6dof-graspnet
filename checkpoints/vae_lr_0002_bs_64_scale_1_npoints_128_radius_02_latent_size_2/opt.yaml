@@ -3,7 +3,7 @@ arch: vae
 balanced_data: false
 batch_size: 64
 beta1: 0.9
-blacklisted_categories: ''
+blacklisted_categories: mug
 checkpoints_dir: ./checkpoints
 confidence_weight: 1.0
 continue_train: false

@@ -321,6 +321,7 @@ class GraspEvaluator(nn.Module):
         return self.evaluator[1](xyz_features.squeeze(-1))
 
     def forward(self, pc, gripper_pc, train=True):
+
         pc, pc_features = self.merge_pc_and_gripper_pc(pc, gripper_pc)
         x = self.evaluate(pc, pc_features.contiguous())
         return self.predictions_logits(x), torch.sigmoid(self.confidence(x))

@@ -9,6 +9,7 @@ from utils import utils
 import glob
 from renderer.online_object_renderer import OnlineObjectRenderer
 import threading
+from autolab_core import RigidTransform
 
 
 class NoPositiveGraspsException(Exception):
@@ -180,11 +181,18 @@ class BaseDataset(data.Dataset):
         json_dict = json.load(open(json_path))
 
         object_model = Object(os.path.join(root_folder, json_dict['object']))
+        
         object_model.rescale(json_dict['object_scale'])
         object_model = object_model.mesh
         object_mean = np.mean(object_model.vertices, 0, keepdims=1)
-
         object_model.vertices -= object_mean
+        #############* change obect transfomation *############# transform object to origin then rescale
+        # object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
+        # object_model.rescale(json_dict['object_scale'])
+        # object_mean = object_model.mesh.centroid
+        # object_model = object_model.mesh
+        
+        
         grasps = np.asarray(json_dict['transforms'])
         grasps[:, :3, 3] -= object_mean
 

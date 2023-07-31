@@ -15,8 +15,11 @@ def CreateDataset(opt, is_train=True):
         else:
             dataset = GraspSamplingData(opt)
     else:
-        from data.grasp_evaluator_data import GraspEvaluatorData
-        dataset = GraspEvaluatorData(opt)
+        from data.grasp_evaluator_data import GraspEvaluatorData, BimanualGraspEvaluatorDataset
+        if opt.is_bimanual:
+            dataset = BimanualGraspEvaluatorDataset(opt)
+        else:
+            dataset = GraspEvaluatorData(opt, is_train=is_train)
     return dataset
 
 

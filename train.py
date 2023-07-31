@@ -38,10 +38,10 @@ def main():
         for i, data in enumerate(dataset):
             
             ##############*data visualization*################
-            # print(pc.shape)
-            # print(data['pc'].device)
             # print(data['pc'].shape)
-            # print(data['cad_path'])
+            # print(data['cad_path'][0])
+            # if i == 0:
+            #     continue
             # pcd_object = o3d.geometry.PointCloud()
             # pcd_object.points = o3d.utility.Vector3dVector(data['pc'][0])
             
