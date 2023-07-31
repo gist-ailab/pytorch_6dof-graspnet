@@ -114,9 +114,9 @@ class BimanualGraspSamplingData(BaseDataset):
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
         
         if not self.is_train:
-            files = files[200:250]
+            files = files[3315]
         else:
-            files = files[:200]
+            files = files[:3315]
 
         return files
     
@@ -304,9 +304,9 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps', file) for file in file_list]
         
         if not self.is_train:
-            files = files[3315:]
+            files = files[200:250]
         else:
-            files = files[:3315]
+            files = files[:200]
 
         return files
     
@@ -404,10 +404,15 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         mesh_scale = h5_file['object/scale'][()]
         # load and rescale, translate object mesh
         object_model = Object(os.path.join(root_folder, mesh_root, mesh_fname))
+        # object_model.rescale(mesh_scale)
+        # object_model = object_model.mesh
+        # object_mean = np.mean(object_model.vertices, 0, keepdims=1)
+        # object_model.vertices -= object_mean
+        
+        object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
         object_model.rescale(mesh_scale)
-        object_model = object_model.mesh
-        object_mean = np.mean(object_model.vertices, 0, keepdims=1)
-        object_model.vertices -= object_mean
+        object_mean = object_model.mesh.centroid
+        object_model = object_model.mesh 
         # load bimanual grasp
         grasps = np.asarray(h5_file['grasps/transforms'])
         grasps[:, :, :3, 3] -= object_mean

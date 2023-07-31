@@ -285,27 +285,22 @@ def get_gripper_pc(batch_size, npoints, use_torch=True):
     return output
 
 
-def get_control_point_tensor(batch_size, use_torch=True, device="cpu", is_bimanual=False):
+def get_control_point_tensor(batch_size, use_torch=True, device="cpu", is_bimanual=False, is_bimanual_v2=False):
     """
       Outputs a tensor of shape (batch_size x 6 x 3).
       use_tf: switches between outputing a tensor and outputing a numpy array.
     """
     
     control_points = np.load('./gripper_control_points/panda.npy')[:, :3]
-    if not is_bimanual:
-        control_points = [[0, 0, 0], [0, 0, 0], control_points[0, :],
-                        control_points[1, :], control_points[-2, :],
-                        control_points[-1, :]]
-    else:
-        # control_points[-2, 2] = control_points[-2, 2] + 0.0375
-        # control_points[-1, 2] = control_points[-1, 2] + 0.0375
-        # control_points = [[0, 0, 0], [0, 0, 0], control_points[0, :],
-        #                 control_points[1, :], control_points[-2, :],
-        #                 control_points[-1, :]]
-
+    if is_bimanual or is_bimanual_v2:
         control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, -7.27595772e-12, 0],
                           [-0.0425, -7.27595772e-12, 0], [0.0425, -7.27595772e-12, 0.0675],
                           [-0.0425, -7.27595772e-12, 0.0675]]
+        
+    else:
+        control_points = [[0, 0, 0], [0, 0, 0], control_points[0, :],
+                        control_points[1, :], control_points[-2, :],
+                        control_points[-1, :]]
         
     control_points = np.asarray(control_points, dtype=np.float32)
     control_points = np.tile(np.expand_dims(control_points, 0),
@@ -354,7 +349,7 @@ def transform_control_points(gt_grasps, batch_size, mode='qt', device="cpu"):
         return torch.matmul(control_points, gt_grasps.permute(0, 2, 1))
 
 
-def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual=False):
+def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual=False, is_bimanual_v2=False):
     """
       Transforms canonical points using gt_grasps.
       mode = 'qt' expects gt_grasps to have (batch_size x 7) where each 
@@ -383,18 +378,20 @@ def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual
     else:
         assert (len(grasp_shape) == 3), grasp_shape
         assert (grasp_shape[1] == 4 and grasp_shape[2] == 4), grasp_shape
-        control_points = get_control_point_tensor(batch_size, use_torch=False, is_bimanual=is_bimanual)
+        control_points = get_control_point_tensor(batch_size, use_torch=False, is_bimanual=is_bimanual, is_bimanual_v2=is_bimanual_v2)
         shape = control_points.shape
 
         ones = np.ones((shape[0], shape[1], 1), dtype=np.float32)
         control_points = np.concatenate((control_points, ones), -1) #(64, 6, 4)
         control_points_trans = copy.deepcopy(control_points)
-        if is_bimanual:
+        if is_bimanual or is_bimanual_v2:
             # should change x,y,z to x,-z,y because of the coordinate system
             control_points_trans[:, :, 2] = -control_points[:, :, 1]
             control_points_trans[:, :, 1] = control_points[:, :, 2]
             control_points = control_points_trans
 
+            
+        
         return np.matmul(control_points, np.transpose(gt_grasps, (0, 2, 1)))
         # return np.matmul(control_points, gt_grasps)
 
