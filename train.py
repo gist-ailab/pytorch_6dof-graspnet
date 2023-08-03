@@ -27,6 +27,7 @@ def main():
         dataset_size = len(dataset) * opt.num_grasps_per_object
 
     model = create_model(opt)
+
     writer = Writer(opt)
     total_steps = 0
 

@@ -554,7 +554,7 @@ def rot_and_trans_to_grasps(euler_angles, translations, selection_mask):
 def convert_qt_to_rt(grasps, is_bimanual=False, is_batched=False):
     if is_bimanual:
         Ts = grasps[:, 4:]
-        Rs = qeuler(grasps[:, :4], "zyx")
+        Rs = qeuler(grasps[:, :4], "zyx", epsilon=1e-4)
     else:
         Ts = grasps[:, 4:]
         Rs = qeuler(grasps[:, :4], "zyx")

@@ -190,7 +190,11 @@ class BaseOptions:
             type=bool,
             default=False,
         )
-        
+        self.parser.add_argument(
+            '--is_dgcnn',
+            type=bool,
+            default=False,
+        )
     def parse(self):
         if not self.initialized:
             self.initialize()
@@ -240,7 +244,11 @@ class BaseOptions:
                 name += "_bimanual"
             if self.opt.is_bimanual_v2:
                 name += "_bimanual_v2"
-
+            if self.opt.seed is not None:
+                name += "_seed_" + str(self.opt.seed)
+            if self.opt.is_dgcnn:
+                name += "_dgcnn"
+                
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)
             if os.path.isdir(expr_dir) and not self.opt.continue_train:

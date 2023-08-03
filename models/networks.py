@@ -73,7 +73,7 @@ def define_classifier(opt, gpu_ids, arch, init_type, init_gain, device):
     net = None
     if arch == 'vae':
         net = GraspSamplerVAE(opt.model_scale, opt.pointnet_radius,
-                              opt.pointnet_nclusters, opt.latent_size, device, opt.is_bimanual_v2)
+                              opt.pointnet_nclusters, opt.latent_size, device, opt.is_bimanual_v2, opt.is_dgcnn)
     elif arch == 'gan':
         net = GraspSamplerGAN(opt.model_scale, opt.pointnet_radius,
                               opt.pointnet_nclusters, opt.latent_size, device)
@@ -107,15 +107,22 @@ class GraspSampler(nn.Module):
         self.device = device
 
     def create_decoder(self, model_scale, pointnet_radius, pointnet_nclusters,
-                       num_input_features, is_bimanual_v2):
+                       num_input_features, is_bimanual_v2, is_dgcnn=False):
         # The number of input features for the decoder is 3+latent space where 3
         # represents the x, y, z position of the point-cloud
         if not is_bimanual_v2:
-            self.decoder = base_network(pointnet_radius, pointnet_nclusters,
-                                        model_scale, num_input_features)
-            self.q = nn.Linear(model_scale * 1024, 4)
-            self.t = nn.Linear(model_scale * 1024, 3)
-            self.confidence = nn.Linear(model_scale * 1024, 1)
+            if is_dgcnn:
+                self.decoder = base_network(pointnet_radius, pointnet_nclusters,
+                                            model_scale, num_input_features, is_dgcnn=True)
+                self.q = nn.Linear(model_scale * 1024, 4)
+                self.t = nn.Linear(model_scale * 1024, 3)
+                self.confidence = nn.Linear(model_scale * 1024, 1)
+            else:
+                self.decoder = base_network(pointnet_radius, pointnet_nclusters,
+                                            model_scale, num_input_features)
+                self.q = nn.Linear(model_scale * 1024, 4)
+                self.t = nn.Linear(model_scale * 1024, 3)
+                self.confidence = nn.Linear(model_scale * 1024, 1)
         else:
             self.decoder = base_network(pointnet_radius, pointnet_nclusters,
                                         model_scale, num_input_features)
@@ -125,12 +132,19 @@ class GraspSampler(nn.Module):
             self.t2 = nn.Linear(model_scale * 1024, 3)
             self.confidence = nn.Linear(model_scale * 1024, 1)
             
-    def decode(self, xyz, z, is_bimanual_v2=False):
+    def decode(self, xyz, z, is_bimanual_v2=False, is_dgcnn=False):
         if not is_bimanual_v2:
-            xyz_features = self.concatenate_z_with_pc(xyz,z).transpose(-1,1).contiguous()
-            for module in self.decoder[0]:
-                xyz, xyz_features = module(xyz, xyz_features)
-            x = self.decoder[1](xyz_features.squeeze(-1))
+            if is_dgcnn:
+                xyz_features = z.unsqueeze(1).expand(-1, xyz.shape[1], -1)
+                xyz_features = torch.transpose(xyz_features, 1, 2).contiguous()
+                xyz_features = self.decoder[0](xyz, xyz_features)
+                x = self.decoder[1](xyz_features.squeeze(-1))
+            else:
+                xyz_features = self.concatenate_z_with_pc(xyz,z).transpose(-1,1).contiguous()
+                for module in self.decoder[0]:
+                    xyz, xyz_features = module(xyz, xyz_features)
+                x = self.decoder[1](xyz_features.squeeze(-1))
+            
             predicted_qt = torch.cat(
                 (F.normalize(self.q(x), p=2, dim=-1), self.t(x)), -1)
             return predicted_qt, torch.sigmoid(self.confidence(x)).squeeze()
@@ -165,26 +179,36 @@ class GraspSamplerVAE(GraspSampler):
                  pointnet_nclusters=128,
                  latent_size=2,
                  device="cpu",
-                 is_bimanual_v2=False):
+                 is_bimanual_v2=False,
+                 is_dgcnn=False):
         super(GraspSamplerVAE, self).__init__(latent_size, device)
-        self.is_bimanual_v2 = is_bimanual_v2
-        self.create_encoder(model_scale, pointnet_radius, pointnet_nclusters)
+        self.device = device
 
-        self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
-                            latent_size + 3, self.is_bimanual_v2)
+        self.is_bimanual_v2 = is_bimanual_v2
+        self.is_dgcnn = is_dgcnn
+        self.create_encoder(model_scale, pointnet_radius, pointnet_nclusters, self.is_dgcnn)
+
+        if self.is_dgcnn:
+            self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
+                                latent_size, self.is_bimanual_v2, is_dgcnn=True)
+        else:
+            self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
+                                latent_size + 3, self.is_bimanual_v2)
         self.create_bottleneck(model_scale * 1024, latent_size)
-        
-        
+                
     def create_encoder(
             self,
             model_scale,
             pointnet_radius,
-            pointnet_nclusters):
+            pointnet_nclusters,
+            bimanual=False):
         # The number of input features for the encoder is 19: the x, y, z
         # position of the point-cloud and the flattened 4x4=16 grasp pose matrix
         if self.is_bimanual_v2:
             self.encoder = base_network(pointnet_radius, pointnet_nclusters, 
                                         model_scale, 35)
+        elif self.is_dgcnn:
+            self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 16, is_dgcnn=True, device=self.device)
         else:
             self.encoder = base_network(pointnet_radius, pointnet_nclusters,
                                         model_scale, 19)
@@ -195,9 +219,24 @@ class GraspSamplerVAE(GraspSampler):
         self.latent_space = nn.ModuleList([mu, logvar])
 
     def encode(self, xyz, xyz_features):
-        for module in self.encoder[0]:
-            xyz, xyz_features = module(xyz, xyz_features)
-        return self.encoder[1](xyz_features.squeeze(-1))
+        if self.is_dgcnn:
+            backbone = self.encoder[0]
+            fc_layer = self.encoder[1]
+            xyz_features = backbone(xyz, xyz_features)
+            return fc_layer(xyz_features.squeeze(-1))
+        else:
+            
+            print('xyz_features', xyz_features.shape)
+            i = 0
+            print(self.encoder[0])
+            for module in self.encoder[0]:
+                # print(module)
+                xyz, xyz_features = module(xyz, xyz_features)
+                if xyz is not None:
+                    print(f'{i}th xyz shape', xyz.shape)
+                print(f'{i}th xyz_features shape', xyz_features.shape)
+                i += 1
+            return self.encoder[1](xyz_features.squeeze(-1))
 
     def bottleneck(self, z):
         return self.latent_space[0](z), self.latent_space[1](z)
@@ -214,24 +253,32 @@ class GraspSamplerVAE(GraspSampler):
             return self.forward_test(pc, grasp)
 
     def forward_train(self, pc, grasp):
-        input_features = torch.cat(
-            (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
-            -1).transpose(-1, 1).contiguous()
+        if self.is_dgcnn:
+            input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
+            input_features = torch.transpose(input_features, 1, 2).contiguous() # (64, 16, 1024)
+        else:
+            input_features = torch.cat(
+                (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
+                -1).transpose(-1, 1).contiguous()
 
         z = self.encode(pc, input_features) #(64, 1024)
-
         mu, logvar = self.bottleneck(z)
         z = self.reparameterize(mu, logvar)
-        qt, confidence = self.decode(pc, z, self.is_bimanual_v2)
+        qt, confidence = self.decode(pc, z, self.is_bimanual_v2, self.is_dgcnn)
         return qt, confidence, mu, logvar
             
     def forward_test(self, pc, grasp):
-        input_features = torch.cat(
-            (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
-            -1).transpose(-1, 1).contiguous()
+        if self.is_dgcnn:
+            input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
+            input_features = torch.transpose(input_features, 1, 2).contiguous() # (64, 16, 1024)
+        else:
+            input_features = torch.cat(
+                (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
+                -1).transpose(-1, 1).contiguous()
+        
         z = self.encode(pc, input_features)
         mu, _ = self.bottleneck(z)
-        qt, confidence = self.decode(pc, mu, self.is_bimanual_v2)
+        qt, confidence = self.decode(pc, mu, self.is_bimanual_v2, self.is_dgcnn)
             
         return qt, confidence
 
@@ -355,24 +402,206 @@ class GraspEvaluator(nn.Module):
         return l0_xyz, l0_points
 
 
-def base_network(pointnet_radius, pointnet_nclusters, scale, in_features):
-    sa1_module = pointnet2.PointnetSAModule(
-        npoint=pointnet_nclusters,
-        radius=pointnet_radius,
-        nsample=64,
-        mlp=[in_features, 64 * scale, 64 * scale, 128 * scale])
-    sa2_module = pointnet2.PointnetSAModule(
-        npoint=32,
-        radius=0.04,
-        nsample=128,
-        mlp=[128 * scale, 128 * scale, 128 * scale, 256 * scale])
+def base_network(pointnet_radius, pointnet_nclusters, scale, in_features, is_dgcnn=False, device='cuda'):
+    if is_dgcnn:
+        base_dgcnn = BaseDgcnn(input_feature=in_features, device=device)
+        fc_layer = nn.Sequential(nn.Linear(512 * scale, 1024 * scale),
+                                nn.BatchNorm1d(1024 * scale), nn.ReLU(True),
+                                nn.Linear(1024 * scale, 1024 * scale),
+                                nn.BatchNorm1d(1024 * scale), nn.ReLU(True))
+        return nn.ModuleList([base_dgcnn, fc_layer])
+    else:
+    
+        sa1_module = pointnet2.PointnetSAModule(
+            npoint=pointnet_nclusters,
+            radius=pointnet_radius,
+            nsample=64,
+            mlp=[in_features, 64 * scale, 64 * scale, 128 * scale])
+        sa2_module = pointnet2.PointnetSAModule(
+            npoint=32,
+            radius=0.04,
+            nsample=128,
+            mlp=[128 * scale, 128 * scale, 128 * scale, 256 * scale])
 
-    sa3_module = pointnet2.PointnetSAModule(
-        mlp=[256 * scale, 256 * scale, 256 * scale, 512 * scale])
+        sa3_module = pointnet2.PointnetSAModule(
+            mlp=[256 * scale, 256 * scale, 256 * scale, 512 * scale])
 
-    sa_modules = nn.ModuleList([sa1_module, sa2_module, sa3_module])
-    fc_layer = nn.Sequential(nn.Linear(512 * scale, 1024 * scale),
-                             nn.BatchNorm1d(1024 * scale), nn.ReLU(True),
-                             nn.Linear(1024 * scale, 1024 * scale),
-                             nn.BatchNorm1d(1024 * scale), nn.ReLU(True))
-    return nn.ModuleList([sa_modules, fc_layer])
+        sa_modules = nn.ModuleList([sa1_module, sa2_module, sa3_module])
+        fc_layer = nn.Sequential(nn.Linear(512 * scale, 1024 * scale),
+                                nn.BatchNorm1d(1024 * scale), nn.ReLU(True),
+                                nn.Linear(1024 * scale, 1024 * scale),
+                                nn.BatchNorm1d(1024 * scale), nn.ReLU(True))
+        return nn.ModuleList([sa_modules, fc_layer])
+
+class BaseDgcnn(nn.Module):
+    def __init__(self, opt=None, input_feature=None, device='cuda'):
+        super().__init__()
+        self.opt = opt
+        self.input_feature = input_feature
+        self.device = device
+        # self.k = self.opt.config['base']['model']['dgcnn']['k']
+        self.k = 20
+        self.transform_net = Transform_Net(opt)
+
+        # self.emb_dims = self.opt.config['base']['model']['dgcnn']['emb_dims']
+        self.emb_dims = 512
+        # self.dropout = self.opt.config['base']['model']['dgcnn']['dropout']
+
+        self.bn1 = nn.BatchNorm2d(64)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.bn3 = nn.BatchNorm2d(64)
+        self.bn4 = nn.BatchNorm2d(64)
+        self.bn5 = nn.BatchNorm2d(64)
+        self.bn6 = nn.BatchNorm1d(self.emb_dims)
+        self.bn7 = nn.BatchNorm1d(64)
+        self.bn8 = nn.BatchNorm1d(256)
+        self.bn9 = nn.BatchNorm1d(256)
+        self.bn10 = nn.BatchNorm1d(128)
+
+        self.conv1 = nn.Sequential(nn.Conv2d(6+self.input_feature, 64, kernel_size=1, bias=False),
+                                   self.bn1,
+                                   nn.LeakyReLU(negative_slope=0.2))
+        self.conv2 = nn.Sequential(nn.Conv2d(64, 64, kernel_size=1, bias=False),
+                                   self.bn2,
+                                   nn.LeakyReLU(negative_slope=0.2))
+        self.conv3 = nn.Sequential(nn.Conv2d(64*2, 64, kernel_size=1, bias=False),
+                                   self.bn3,
+                                   nn.LeakyReLU(negative_slope=0.2))
+        self.conv4 = nn.Sequential(nn.Conv2d(64, 64, kernel_size=1, bias=False),
+                                   self.bn4,
+                                   nn.LeakyReLU(negative_slope=0.2))
+        self.conv5 = nn.Sequential(nn.Conv2d(64*2, 64, kernel_size=1, bias=False),
+                                   self.bn5,
+                                   nn.LeakyReLU(negative_slope=0.2))
+        self.conv6 = nn.Sequential(nn.Conv1d(192, self.emb_dims, kernel_size=1, bias=False),
+                                   self.bn6,
+                                   nn.LeakyReLU(negative_slope=0.2))
+        
+            
+
+
+    def forward(self, x, rot_feat):
+
+        x = x.transpose(2, 1)
+        batch_size = x.size(0)
+        num_points = x.size(2)
+
+
+        x0 = get_graph_feature(x, k=self.k, device=self.device)     # (batch_size, 3, num_points) -> (batch_size, 3*2, num_points, k)
+        t = self.transform_net(x0)              # (batch_size, 3, 3)
+        x = x.transpose(2, 1)                   # (batch_size, 3, num_points) -> (batch_size, num_points, 3)
+        x, t = x.double(), t.double()
+        x = torch.bmm(x, t)                     # (batch_size, num_points, 3) * (batch_size, 3, 3) -> (batch_size, num_points, 3)
+        x = x.transpose(2, 1)                   # (batch_size, num_points, 3) -> (batch_size, 3, num_points)
+
+        x = get_graph_feature(x, k=self.k,device=self.device)      # (batch_size, 3, num_points) -> (batch_size, 3*2, num_points, k)
+        #* concat x and grasp rotation matrix
+        rot_feat = rot_feat.unsqueeze(-1).expand(-1,-1,-1,self.k)
+        x = torch.cat((x, rot_feat), dim=1)     # (batch_size, 6+16, num_points)
+
+        x = x.float()
+        x = self.conv1(x)                       # (batch_size, 22, num_points, k) -> (batch_size, 64, num_points, k)
+        x = self.conv2(x)                       # (batch_size, 64, num_points, k) -> (batch_size, 64, num_points, k)
+        x1 = x.max(dim=-1, keepdim=False)[0]    # (batch_size, 64, num_points, k) -> (batch_size, 64, num_points)
+
+        x = get_graph_feature(x1, k=self.k, device=self.device)     # (batch_size, 64, num_points) -> (batch_size, 64*2, num_points, k)
+        x = self.conv3(x)                       # (batch_size, 64*2, num_points, k) -> (batch_size, 64, num_points, k)
+        x = self.conv4(x)                       # (batch_size, 64, num_points, k) -> (batch_size, 64, num_points, k)
+        x2 = x.max(dim=-1, keepdim=False)[0]    # (batch_size, 64, num_points, k) -> (batch_size, 64, num_points)
+
+        x = get_graph_feature(x2, k=self.k, device=self.device)     # (batch_size, 64, num_points) -> (batch_size, 64*2, num_points, k)
+        x = self.conv5(x)                       # (batch_size, 64*2, num_points, k) -> (batch_size, 64, num_points, k)
+        x3 = x.max(dim=-1, keepdim=False)[0]    # (batch_size, 64, num_points, k) -> (batch_size, 64, num_points)
+
+        x = torch.cat((x1, x2, x3), dim=1)      # (batch_size, 64*3, num_points)
+
+        x = self.conv6(x)                       # (batch_size, 64*3, num_points) -> (batch_size, emb_dims, num_points)
+        #* num points to 1
+        x = x.max(dim=-1, keepdim=True)[0]     # (batch_size, emb_dims, num_points) -> (batch_size, emb_dims, 1)
+        return x
+
+def knn(x, k):
+    inner = -2*torch.matmul(x.transpose(2, 1), x)
+    xx = torch.sum(x**2, dim=1, keepdim=True)
+    pairwise_distance = -xx - inner - xx.transpose(2, 1)
+
+    idx = pairwise_distance.topk(k=k, dim=-1)[1]   # (batch_size, num_points, k)
+    return idx
+
+
+def get_graph_feature(x, k=20, idx=None, dim9=False, device=None):
+    batch_size = x.size(0)
+    num_points = x.size(2)
+    x = x.view(batch_size, -1, num_points)
+    if idx is None:
+        if dim9 == False:
+            idx = knn(x, k=k)   # (batch_size, num_points, k)
+        else:
+            idx = knn(x[:, 6:], k=k)
+    # device = torch.device('cuda')
+
+    idx_base = torch.arange(0, batch_size, device=idx.device).view(-1, 1, 1)*num_points
+
+    idx = idx + idx_base
+
+    idx = idx.view(-1)
+ 
+    _, num_dims, _ = x.size()
+
+    x = x.transpose(2, 1).contiguous()   # (batch_size, num_points, num_dims)  -> (batch_size*num_points, num_dims) #   batch_size * num_points * k + range(0, batch_size*num_points)
+    feature = x.view(batch_size*num_points, -1)[idx, :]
+    feature = feature.view(batch_size, num_points, k, num_dims) 
+    x = x.view(batch_size, num_points, 1, num_dims).repeat(1, 1, k, 1)
+    
+    feature = torch.cat((feature-x, x), dim=3).permute(0, 3, 1, 2).contiguous()
+  
+    return feature      # (batch_size, 2*num_dims, num_points, k)
+
+
+class Transform_Net(nn.Module):
+    def __init__(self, opt=None):
+        super(Transform_Net, self).__init__()
+        self.opt = opt
+        self.k = 3
+
+        self.bn1 = nn.BatchNorm2d(64)
+        self.bn2 = nn.BatchNorm2d(128)
+        self.bn3 = nn.BatchNorm1d(1024)
+
+        self.conv1 = nn.Sequential(nn.Conv2d(6, 64, kernel_size=1, bias=False),
+                                   self.bn1,
+                                   nn.LeakyReLU(negative_slope=0.2))
+        self.conv2 = nn.Sequential(nn.Conv2d(64, 128, kernel_size=1, bias=False),
+                                   self.bn2,
+                                   nn.LeakyReLU(negative_slope=0.2))
+        self.conv3 = nn.Sequential(nn.Conv1d(128, 1024, kernel_size=1, bias=False),
+                                   self.bn3,
+                                   nn.LeakyReLU(negative_slope=0.2))
+
+        self.linear1 = nn.Linear(1024, 512, bias=False)
+        self.bn3 = nn.BatchNorm1d(512)
+        self.linear2 = nn.Linear(512, 256, bias=False)
+        self.bn4 = nn.BatchNorm1d(256)
+
+        self.transform = nn.Linear(256, 3*3)
+        init.constant_(self.transform.weight, 0)
+        init.eye_(self.transform.bias.view(3, 3))
+
+    def forward(self, x):
+        x = x.float()
+        batch_size = x.size(0)
+
+        x = self.conv1(x)                       # (batch_size, 3*2, num_points, k) -> (batch_size, 64, num_points, k)
+        x = self.conv2(x)                       # (batch_size, 64, num_points, k) -> (batch_size, 128, num_points, k)
+        x = x.max(dim=-1, keepdim=False)[0]     # (batch_size, 128, num_points, k) -> (batch_size, 128, num_points)
+
+        x = self.conv3(x)                       # (batch_size, 128, num_points) -> (batch_size, 1024, num_points)
+        x = x.max(dim=-1, keepdim=False)[0]     # (batch_size, 1024, num_points) -> (batch_size, 1024)
+
+        x = F.leaky_relu(self.bn3(self.linear1(x)), negative_slope=0.2)     # (batch_size, 1024) -> (batch_size, 512)
+        x = F.leaky_relu(self.bn4(self.linear2(x)), negative_slope=0.2)     # (batch_size, 512) -> (batch_size, 256)
+
+        x = self.transform(x)                   # (batch_size, 256) -> (batch_size, 3*3)
+        x = x.view(batch_size, 3, 3)            # (batch_size, 3*3) -> (batch_size, 3, 3)
+
+        return x

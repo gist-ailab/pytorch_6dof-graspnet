@@ -248,36 +248,6 @@ class GraspNetModel:
                         device=self.device)
                     return reconstruction_loss, 1
                 else:
-<<<<<<< HEAD
-                    if len(self.opt.gpu_ids) > 1:
-                        prediction = torch.transpose(prediction, 0, 1)
-                    predicted_cp1 = utils.transform_control_points(
-                    prediction[0], prediction[0].shape[0], device=self.device)
-                    predicted_cp2 = utils.transform_control_points(
-                        prediction[1], prediction[1].shape[0], device=self.device)
-                    predicted_cp = torch.cat([predicted_cp1.unsqueeze(0), predicted_cp2.unsqueeze(0)], dim=0)# (2, 64, 6, 3)
-                    reconstruction_loss, _ = self.criterion[1](
-                        predicted_cp,
-                        self.targets,
-                        confidence=confidence,
-                        confidence_weight=self.opt.confidence_weight,
-                        device=self.device,
-                        is_bimanual_v2=self.opt.is_bimanual_v2)
-                    return reconstruction_loss, 1
-            elif self.opt.arch == "gan":
-                predicted_cp = utils.transform_control_points(
-                    prediction, prediction.shape[0], device=self.device)
-                reconstruction_loss, _ = self.criterion(
-                    predicted_cp,
-                    self.targets,
-                    confidence=confidence,
-                    confidence_weight=self.opt.confidence_weight,
-                    device=self.device)
-                return reconstruction_loss, 1
-            else:
-=======
->>>>>>> 2ab09b322a074acee19569dcb46665c0b300c1a2
-
                     predicted = torch.round(torch.sigmoid(prediction)).squeeze()
                     correct = (predicted == self.targets).sum().item()
                     return correct, len(self.targets)

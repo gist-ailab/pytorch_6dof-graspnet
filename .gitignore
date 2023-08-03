@@ -5,3 +5,4 @@
 /Pointnet2_PyTorch
 /*.tar.gz
 /checkpoints
+checkpoints/*
