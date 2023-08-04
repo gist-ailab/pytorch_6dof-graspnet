@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from models import losses
 from torch.nn import Sequential as Seq, Linear as Lin, ReLU, BatchNorm1d as BN
 import pointnet2_ops.pointnet2_modules as pointnet2
-
+from time import time
 
 def get_scheduler(optimizer, opt):
     if opt.lr_policy == 'lambda':
@@ -220,22 +220,11 @@ class GraspSamplerVAE(GraspSampler):
 
     def encode(self, xyz, xyz_features):
         if self.is_dgcnn:
-            backbone = self.encoder[0]
-            fc_layer = self.encoder[1]
-            xyz_features = backbone(xyz, xyz_features)
-            return fc_layer(xyz_features.squeeze(-1))
+            xyz_features = self.encoder[0](xyz, xyz_features)
+            return self.encoder[1](xyz_features.squeeze(-1))
         else:
-            
-            print('xyz_features', xyz_features.shape)
-            i = 0
-            print(self.encoder[0])
             for module in self.encoder[0]:
-                # print(module)
                 xyz, xyz_features = module(xyz, xyz_features)
-                if xyz is not None:
-                    print(f'{i}th xyz shape', xyz.shape)
-                print(f'{i}th xyz_features shape', xyz_features.shape)
-                i += 1
             return self.encoder[1](xyz_features.squeeze(-1))
 
     def bottleneck(self, z):
@@ -260,11 +249,16 @@ class GraspSamplerVAE(GraspSampler):
             input_features = torch.cat(
                 (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
                 -1).transpose(-1, 1).contiguous()
-
+        start = time()
         z = self.encode(pc, input_features) #(64, 1024)
+        end = time()
+        # print('encode time', end - start)
         mu, logvar = self.bottleneck(z)
         z = self.reparameterize(mu, logvar)
+        start = time()
         qt, confidence = self.decode(pc, z, self.is_bimanual_v2, self.is_dgcnn)
+        end = time()
+        # print('decode time', end - start)
         return qt, confidence, mu, logvar
             
     def forward_test(self, pc, grasp):

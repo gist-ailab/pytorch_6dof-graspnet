@@ -4,7 +4,7 @@ arch: vae
 balanced_data: False
 batch_size: 64
 beta1: 0.9
-blacklisted_categories: mug
+blacklisted_categories: 
 checkpoints_dir: ./checkpoints
 confidence_weight: 1.0
 continue_train: False
@@ -12,7 +12,7 @@ dataset_root_folder: unified_grasp_data
 dataset_split: train
 depth_noise: 0.0
 epoch_count: 1
-gpu_ids: [0, 2]
+gpu_ids: [7]
 grasps_folder_name: grasps
 grasps_ratio: 1.0
 gripper: panda
@@ -21,6 +21,7 @@ init_gain: 0.02
 init_type: normal
 is_bimanual: False
 is_bimanual_v2: False
+is_dgcnn: False
 is_train: True
 kl_loss_weight: 0.01
 latent_size: 2
@@ -38,7 +39,7 @@ npoints: 1024
 num_grasp_clusters: 32
 num_grasps_per_object: 64
 num_objects_per_batch: 1
-num_threads: 32
+num_threads: 3
 occlusion_dropout_rate: 0
 occlusion_nclusters: 0
 phase: train
