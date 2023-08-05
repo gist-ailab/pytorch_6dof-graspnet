@@ -226,16 +226,12 @@ class GraspSamplerVAE(GraspSampler):
             return fc_layer(xyz_features.squeeze(-1))
         else:
             
-            print('xyz_features', xyz_features.shape)
-            i = 0
-            print(self.encoder[0])
+
             for module in self.encoder[0]:
                 # print(module)
                 xyz, xyz_features = module(xyz, xyz_features)
-                if xyz is not None:
-                    print(f'{i}th xyz shape', xyz.shape)
-                print(f'{i}th xyz_features shape', xyz_features.shape)
-                i += 1
+
+
             return self.encoder[1](xyz_features.squeeze(-1))
 
     def bottleneck(self, z):
