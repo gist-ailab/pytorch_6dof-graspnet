@@ -248,6 +248,8 @@ class BaseOptions:
                 name += "_seed_" + str(self.opt.seed)
             if self.opt.is_dgcnn:
                 name += "_dgcnn"
+            if self.opt.npoints != 1024:
+                name += "_npoints_" + str(self.opt.npoints)
                 
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)

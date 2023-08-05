@@ -381,7 +381,9 @@ class BimanualGraspEvaluatorDataset(BaseDataset):
             # add hard negative samples from positive grasps
             random_selector = np.random.rand()
             if random_selector < self.ratio_hardnegative:
-                collisions, heuristic
+                collisions, heuristic_qualities = utils.evaluate_grasps(
+                    hard_neg_candidates, obj_mesh
+                )
             
         
     def read_grasp_file(self, path, return_all_grasps=False):

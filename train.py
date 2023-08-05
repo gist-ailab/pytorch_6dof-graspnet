@@ -26,6 +26,7 @@ def main():
     else:    
         dataset_size = len(dataset) * opt.num_grasps_per_object
 
+    
     model = create_model(opt)
 
     writer = Writer(opt)

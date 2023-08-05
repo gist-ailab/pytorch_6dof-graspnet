@@ -13,3 +13,7 @@ PyYAML==5.4.1
 tensorboardX==2.0
 python-fcl
 rtree
+autolab-core
+pylet==1.5.27
+open3d
+pytorch3d

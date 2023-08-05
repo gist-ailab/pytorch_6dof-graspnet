@@ -299,21 +299,52 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         file_list = os.listdir(os.path.join(self.opt.dataset_root_folder,
                                'grasps'))
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps', file) for file in file_list]
-        
-        if not self.is_train:
-            files = files[200:250]
-        else:
-            files = files[:200]
+        files_proccessed = []
+        for file in files:
+            h5_file = h5py.File(file, 'r')
+            force_closure = np.array(h5_file["/grasps/qualities/Force_closure"])
+            torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
+            dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
+            
+            force_closure_weight = 0.4
+            torque_optimization_weight = 0.1
+            dexterity_weight = 0.5
+            
+            sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
+                            dexterity_weight * dexterity
 
-        return files
+            sum_quality = sum_quality.reshape(-1)
+            sum_quality_idx = np.where(sum_quality.reshape(-1) > 0.85)[0]
+
+            if len(sum_quality_idx) == 0:
+                print('no grasp quality is over 0.85')
+                continue
+            
+            files_proccessed.append(file)  
+            
+        if not self.is_train:
+            files_proccessed = files_proccessed[1000:1200]
+        else:
+            files_proccessed = files_proccessed[:1000]
+
+        return files_proccessed
     
     def __getitem__(self, index):
         path = self.paths[index]
         pos_grasps, pos_qualities, _, cad_path, cad_scale = self.read_grasp_file(path)
         meta = {}
         #sample the grasp idx for data loader
-        sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
+        # sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
         
+        pos_grasp_idxs = np.where(pos_qualities.reshape(-1) > 0.85)[0]
+        
+        if len(pos_grasp_idxs) < self.opt.num_grasps_per_object:
+            sampled_grasp_idxs = pos_grasp_idxs
+            while len(sampled_grasp_idxs) < self.opt.num_grasps_per_object:
+                sampled_grasp_idxs = np.append(sampled_grasp_idxs, np.random.choice(pos_grasp_idxs, 1))
+        else:
+            sampled_grasp_idxs = np.random.choice(pos_grasp_idxs, self.opt.num_grasps_per_object)
+
         # render the scene to get pc and camera pose using pyrender
         pc, camera_pose, _ = self.change_object_and_render(
             cad_path,
@@ -420,8 +451,8 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
         
         force_closure_weight = 0.4
-        torque_optimization_weight = 0.5
-        dexterity_weight = 0.1
+        torque_optimization_weight = 0.1
+        dexterity_weight = 0.5
         
         sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
                         dexterity_weight * dexterity
