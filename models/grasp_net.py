@@ -109,9 +109,9 @@ class GraspNetModel:
                 if len(self.opt.gpu_ids) > 1:
                     predicted_cp = torch.transpose(predicted_cp, 0, 1)
                 predicted_cp1 = utils.transform_control_points(
-                    predicted_cp[0], predicted_cp[0].shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
+                    predicted_cp[0], predicted_cp[0].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
                 predicted_cp2 = utils.transform_control_points(
-                    predicted_cp[1], predicted_cp[1].shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
+                    predicted_cp[1], predicted_cp[1].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
                 predicted_cp = torch.cat([predicted_cp1.unsqueeze(0), predicted_cp2.unsqueeze(0)], dim=0)# (2, 64, 6, 3)
                 predicted_cp = predicted_cp.to(device=self.device)
                 self.reconstruction_loss, self.confidence_loss = self.criterion[1](
@@ -224,10 +224,13 @@ class GraspNetModel:
                             device=self.device)
                         return reconstruction_loss, 1
                     else:
+                        if len(self.opt.gpu_ids) > 1:
+                            prediction = torch.transpose(prediction, 0, 1)
+                        
                         predicted_cp1 = utils.transform_control_points(
-                        prediction[0], prediction[0].shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
+                        prediction[0], prediction[0].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
                         predicted_cp2 = utils.transform_control_points(
-                            prediction[1], prediction[1].shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
+                            prediction[1], prediction[1].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
                         predicted_cp = torch.cat([predicted_cp1.unsqueeze(0), predicted_cp2.unsqueeze(0)], dim=0)# (2, 64, 6, 3)
                         reconstruction_loss, _ = self.criterion[1](
                             predicted_cp,
