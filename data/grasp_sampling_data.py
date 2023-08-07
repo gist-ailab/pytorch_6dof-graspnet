@@ -323,9 +323,9 @@ class BimanualGraspSamplingDataV2(BaseDataset):
             files_proccessed.append(file)  
             
         if not self.is_train:
-            files_proccessed = files_proccessed[1000:1200]
+            files_proccessed = files_proccessed[100:120]
         else:
-            files_proccessed = files_proccessed[:1000]
+            files_proccessed = files_proccessed[:100]
 
         return files_proccessed
     
