@@ -250,6 +250,8 @@ class BaseOptions:
                 name += "_dgcnn"
             if self.opt.npoints != 1024:
                 name += "_npoints_" + str(self.opt.npoints)
+            if self.opt.kl_loss_weight != 0.01:
+                name += "_kl_loss_weight_" + str(self.opt.kl_loss_weight)
                 
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)
