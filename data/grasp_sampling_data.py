@@ -114,9 +114,9 @@ class BimanualGraspSamplingData(BaseDataset):
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
         
         if not self.is_train:
-            files = files[3315:]
+            files = files[100:120]
         else:
-            files = files[:3315]
+            files = files[:100] # 3315
 
         return files
     
@@ -367,9 +367,9 @@ class BimanualGraspSamplingDataV2(BaseDataset):
             output_grasps2.append(camera_pose.dot(selected_grasp[1]))
             
         gt_control_points1 = utils.transform_control_points_numpy(
-            np.array(output_grasps1), self.opt.num_grasps_per_object, mode='rt') #(64, 6, 4)
+            np.array(output_grasps1), self.opt.num_grasps_per_object, mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2) #(64, 6, 4)
         gt_control_points2 = utils.transform_control_points_numpy(
-            np.array(output_grasps2), self.opt.num_grasps_per_object, mode='rt') #(64, 6, 4)
+            np.array(output_grasps2), self.opt.num_grasps_per_object, mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2) #(64, 6, 4)
         
         meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
         meta['grasp_rt1'] = np.array(output_grasps1).reshape(
