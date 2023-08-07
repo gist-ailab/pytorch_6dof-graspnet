@@ -12,9 +12,10 @@ dataset_split: train
 depth_noise: 0.0
 epoch_count: 1
 gpu_ids:
-- 1
 - 3
 - 4
+- 5
+- 6
 grasps_folder_name: grasps
 grasps_ratio: 1.0
 gripper: panda
@@ -23,6 +24,7 @@ init_gain: 0.02
 init_type: normal
 is_bimanual: true
 is_bimanual_v2: false
+is_dgcnn: false
 is_train: true
 kl_loss_weight: 0.01
 latent_size: 2
@@ -40,17 +42,17 @@ npoints: 1024
 num_grasp_clusters: 32
 num_grasps_per_object: 64
 num_objects_per_batch: 1
-num_threads: 32
+num_threads: 1
 occlusion_dropout_rate: 0
 occlusion_nclusters: 0
 phase: train
 pointnet_nclusters: 128
 pointnet_radius: 0.02
-print_freq: 100
+print_freq: 300
 run_test_freq: 1
 save_epoch_freq: 1
 save_latest_freq: 250
-seed: 7
+seed: null
 serial_batches: false
 skip_error: false
 splits_folder_name: splits

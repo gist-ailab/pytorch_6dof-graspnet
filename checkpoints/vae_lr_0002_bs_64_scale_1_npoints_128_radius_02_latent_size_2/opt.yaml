@@ -3,7 +3,7 @@ arch: vae
 balanced_data: false
 batch_size: 64
 beta1: 0.9
-blacklisted_categories: ''
+blacklisted_categories: mug
 checkpoints_dir: ./checkpoints
 confidence_weight: 1.0
 continue_train: false
@@ -12,7 +12,9 @@ dataset_split: train
 depth_noise: 0.0
 epoch_count: 1
 gpu_ids:
-- 7
+- 4
+- 5
+- 6
 grasps_folder_name: grasps
 grasps_ratio: 1.0
 gripper: panda
@@ -32,22 +34,22 @@ max_dataset_size: .inf
 merge_pcs_in_vae_encoder: 0
 model_scale: 1
 name: vae_lr_0002_bs_64_scale_1_npoints_128_radius_02_latent_size_2
-niter: 100
-niter_decay: 2000
+niter: 1000
+niter_decay: 10000
 no_vis: false
 npoints: 1024
 num_grasp_clusters: 32
 num_grasps_per_object: 64
 num_objects_per_batch: 1
-num_threads: 3
+num_threads: 32
 occlusion_dropout_rate: 0
 occlusion_nclusters: 0
 phase: train
 pointnet_nclusters: 128
 pointnet_radius: 0.02
 print_freq: 100
-run_test_freq: 1
-save_epoch_freq: 1
+run_test_freq: 10
+save_epoch_freq: 50
 save_latest_freq: 250
 seed: null
 serial_batches: false

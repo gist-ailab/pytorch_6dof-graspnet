@@ -114,9 +114,9 @@ class BimanualGraspSamplingData(BaseDataset):
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
         
         if not self.is_train:
-            files = files[3315:]
+            files = files[100:120]
         else:
-            files = files[:3315]
+            files = files[:100] #3315
 
         return files
     
@@ -126,8 +126,26 @@ class BimanualGraspSamplingData(BaseDataset):
         # pos_grasps, pos_qualities, _, cad_path, cad_scale = copy.deepcopy(self.cache[path])
         meta = {}
         #sample the grasp idx for data loader
-        sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
+        if len(pos_grasps) < self.opt.num_grasps_per_object:
+            sampled_grasp_idxs = [i for i in range(len(pos_grasps))]
+            while len(sampled_grasp_idxs) < self.opt.num_grasps_per_object:
+                sampled_grasp_idxs = np.append(sampled_grasp_idxs, np.random.choice(len(pos_grasps), 1))
+        else:
+            sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
+        # sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
+        tmp = copy.deepcopy(pos_qualities)
+        tmp = tmp.reshape(-1)
+        tmp = sorted(tmp, reverse=True)
+        pos_idx = len(tmp) // 10 * 4
+        pos_grasp_idx_list = np.where(np.isin(pos_qualities, tmp[:pos_idx]))[0]
+        if len(pos_grasp_idx_list) < self.opt.num_grasps_per_object:
+            sampled_grasp_idxs = pos_grasp_idx_list
+            while len(sampled_grasp_idxs) < self.opt.num_grasps_per_object:
+                sampled_grasp_idxs = np.append(sampled_grasp_idxs, np.random.choice(pos_grasp_idx_list, 1))
+        else:
+            sampled_grasp_idxs = np.random.choice(pos_grasp_idx_list, self.opt.num_grasps_per_object)
         
+
         # render the scene to get pc and camera pose using pyrender
         pc, camera_pose, _ = self.change_object_and_render(
             cad_path,
@@ -312,6 +330,15 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         pos_grasps, pos_qualities, _, cad_path, cad_scale = self.read_grasp_file(path)
         meta = {}
         #sample the grasp idx for data loader
+        # if len(pos_grasps) < self.opt.num_grasps_per_object:
+        #     sampled_grasp_idxs = [i for i in range(len(pos_grasps))]
+        #     while len(sampled_grasp_idxs) > self.opt.num_grasps_per_object:
+        #         sampled_grasp_idxs = np.append(sampled_grasp_idxs, np.random.choice(len(pos_grasps), 1))
+        # else:
+        #     sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
+        # print(len(pos_grasps))
+        # print(sampled_grasp_idxs)
+        # exit()
         sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
         
         # render the scene to get pc and camera pose using pyrender
