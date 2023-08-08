@@ -105,9 +105,9 @@ class GraspNetModel:
                     device=self.device)  
             else:
                 predicted_cp, confidence, mu, logvar = out
-
                 if len(self.opt.gpu_ids) > 1:
                     predicted_cp = torch.transpose(predicted_cp, 0, 1)
+                    
                 predicted_cp1 = utils.transform_control_points(
                     predicted_cp[0], predicted_cp[0].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
                 predicted_cp2 = utils.transform_control_points(

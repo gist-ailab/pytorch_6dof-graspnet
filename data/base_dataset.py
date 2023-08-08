@@ -361,9 +361,11 @@ def collate_fn(batch):
     """Creates mini-batch tensors
     We should build custom collate_fn rather than using default collate_fn
     """
-    batch = list(filter(lambda x: x is not None, batch))  #
+    batch = list(filter(lambda x: x is not None, batch)) 
+    # batch = list(filter(lambda x: bool(x), batch))
     meta = {}
-    keys = batch[0].keys()
-    for key in keys:
-        meta.update({key: np.concatenate([d[key] for d in batch])})
+    if len(batch) > 0:
+        keys = batch[0].keys()
+        for key in keys:
+            meta.update({key: np.concatenate([d[key] for d in batch])})
     return meta
