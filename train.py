@@ -17,6 +17,9 @@ import os
 def main():
     opt = TrainOptions().parse()
 
+    ##* for debug
+    
+    
     if opt == None:
         return
 

@@ -240,6 +240,8 @@ class BaseOptions:
                 name += "_bimanual"
             if self.opt.is_bimanual_v2:
                 name += "_bimanual_v2"
+            if self.opt.seed is not None:
+                name += "_seed_" + str(self.opt.seed)
 
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)

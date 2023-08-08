@@ -10,6 +10,7 @@ import glob
 from renderer.online_object_renderer import OnlineObjectRenderer
 import threading
 from autolab_core import RigidTransform
+import trimesh
 
 
 class NoPositiveGraspsException(Exception):
@@ -187,6 +188,8 @@ class BaseDataset(data.Dataset):
         object_mean = np.mean(object_model.vertices, 0, keepdims=1)
         object_model.vertices -= object_mean
         #############* change obect transfomation *############# transform object to origin then rescale
+        # trimesh.Scene(object_model).show()
+        
         # object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
         # object_model.rescale(json_dict['object_scale'])
         # object_mean = object_model.mesh.centroid

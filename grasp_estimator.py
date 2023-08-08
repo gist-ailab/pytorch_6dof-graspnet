@@ -57,6 +57,7 @@ class GraspEstimator:
     ):
         pc_list, pc_mean = self.prepare_pc(pc)
         grasps_list, confidence_list, z_list = self.generate_grasps(pc_list)
+
         inlier_indices = utils.get_inlier_grasp_indices(grasps_list,
                                                         torch.zeros(1, 3).to(
                                                             self.device),
@@ -65,13 +66,19 @@ class GraspEstimator:
         self.keep_inliers(grasps_list, confidence_list, z_list, pc_list,
                           inlier_indices)
         improved_eulers, improved_ts, improved_success = [], [], []
+
         for pc, grasps in zip(pc_list, grasps_list):
+
             out = self.refine_grasps(pc, grasps, self.refine_method,
-                                     self.num_refine_steps)
+                                     self.num_refine_steps) #((26, 30, 3), (26,30,3), (26,30))
+
             improved_eulers.append(out[0])
             improved_ts.append(out[1])
             improved_success.append(out[2])
-        improved_eulers = np.hstack(improved_eulers)
+
+
+        improved_eulers = np.hstack(improved_eulers) # (26, 200, 3)= (refine, sample, euler)
+
         improved_ts = np.hstack(improved_ts)
         improved_success = np.hstack(improved_success)
         if self.choose_fn is "all":
@@ -81,8 +88,12 @@ class GraspEstimator:
                                                              improved_ts,
                                                              improved_success,
                                                              self.threshold)
+        # print(selection_mask.shape)
+        # print(improved_eulers.shape)
+        # exit()
         grasps = utils.rot_and_trans_to_grasps(improved_eulers, improved_ts,
                                                selection_mask)
+
         utils.denormalize_grasps(grasps, pc_mean)
         refine_indexes, sample_indexes = np.where(selection_mask)
         success_prob = improved_success[refine_indexes,
@@ -90,9 +101,12 @@ class GraspEstimator:
         return grasps, success_prob
 
     def prepare_pc(self, pc):
+
         if pc.shape[0] > self.target_pc_size:
             pc = utils.regularize_pc_point_count(pc, self.target_pc_size)
+
         pc_mean = np.mean(pc, 0)
+
         pc -= np.expand_dims(pc_mean, 0)
         pc = np.tile(pc, (self.num_grasp_samples, 1, 1))
         pc = torch.from_numpy(pc).float().to(self.device)

@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "args": [
+                "--arch",
+                "vae",
+                "--dataset_root_folder",
+                "da2_dataset",
+                "--is_bimanual",
+                "True",
+                "--num_threads",
+                "16",
+                "--continue_train",
+                "--which_epoch",
+                "956",
+                "--seed",
+                "7"
+            ],
+            "console": "integratedTerminal",
+        },
+        {
+            "name": "Python: File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "justMyCode": true
+        }
+    ]
+}

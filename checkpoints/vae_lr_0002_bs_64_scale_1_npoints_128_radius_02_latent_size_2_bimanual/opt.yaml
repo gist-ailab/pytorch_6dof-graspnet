@@ -38,7 +38,7 @@ npoints: 1024
 num_grasp_clusters: 32
 num_grasps_per_object: 64
 num_objects_per_batch: 1
-num_threads: 16
+num_threads: 1
 occlusion_dropout_rate: 0
 occlusion_nclusters: 0
 phase: train

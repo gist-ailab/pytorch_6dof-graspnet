@@ -11,6 +11,7 @@ from time import time
 from tqdm import tqdm
 import open3d as o3d
 from autolab_core import RigidTransform
+import trimesh
 
 class GraspSamplingData(BaseDataset):
     def __init__(self, opt):
@@ -51,7 +52,15 @@ class GraspSamplingData(BaseDataset):
             cad_scale,
             thread_id=torch.utils.data.get_worker_info().id
             if torch.utils.data.get_worker_info() else 0)
+        #* check point cloud is normalized
+        # print(np.mean(pc, axis=0))
 
+        # furthest_distance = np.max(np.sqrt(np.sum(abs(pc[:, :3])**2,axis=-1)))
+        # print(furthest_distance)
+        # furthest_distance = np.max(np.sqrt(abs(pc)**2))
+        # print(furthest_distance)
+        # exit()
+        
         output_qualities = []
         output_grasps = []
         for iter in range(self.opt.num_grasps_per_object):
@@ -114,9 +123,10 @@ class BimanualGraspSamplingData(BaseDataset):
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
         
         if not self.is_train:
-            files = files[200:225]
+            # files = files[200:210]
+            files = files[:50]
         else:
-            files = files[:100]
+            files = files[:50]
 
         return files
     
@@ -134,7 +144,10 @@ class BimanualGraspSamplingData(BaseDataset):
             cad_scale,
             thread_id=torch.utils.data.get_worker_info().id
             if torch.utils.data.get_worker_info() else 0)
-        
+        # print(np.mean(pc, axis=0))
+        furthest_distance = np.max(np.sqrt(np.sum(abs(pc[:, :3])**2,axis=-1)))
+        print(furthest_distance)
+        # exit()
         # get the grasp and quality for the sampled grasp idx
         output_qualities = []
         output_grasps = []
@@ -217,7 +230,8 @@ class BimanualGraspSamplingData(BaseDataset):
         object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
         object_model.rescale(mesh_scale)
         object_mean = object_model.mesh.centroid
-        object_model = object_model.mesh        
+        object_model = object_model.mesh
+        # trimesh.Scene(object_model).show() 
         # load bimanual grasp
         # grasps = np.asarray(h5_file['grasps/transforms'])
         # grasps[:, :, :3, 3] -= object_mean
@@ -336,9 +350,9 @@ class BimanualGraspSamplingDataV2(BaseDataset):
             output_grasps2.append(camera_pose.dot(selected_grasp[1]))
             
         gt_control_points1 = utils.transform_control_points_numpy(
-            np.array(output_grasps1), self.opt.num_grasps_per_object, mode='rt') #(64, 6, 4)
+            np.array(output_grasps1), self.opt.num_grasps_per_object, mode='rt', is_bimanual=True) #(64, 6, 4)
         gt_control_points2 = utils.transform_control_points_numpy(
-            np.array(output_grasps2), self.opt.num_grasps_per_object, mode='rt') #(64, 6, 4)
+            np.array(output_grasps2), self.opt.num_grasps_per_object, mode='rt', is_bimanual=True) #(64, 6, 4)
         
         meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
         meta['grasp_rt1'] = np.array(output_grasps1).reshape(
@@ -401,11 +415,18 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         mesh_scale = h5_file['object/scale'][()]
         # load and rescale, translate object mesh
         object_model = Object(os.path.join(root_folder, mesh_root, mesh_fname))
+        ###########* change object model transformation
+        object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
         object_model.rescale(mesh_scale)
+        object_mean = object_model.mesh.centroid
         object_model = object_model.mesh
-        object_mean = np.mean(object_model.vertices, 0, keepdims=1)
-        object_model.vertices -= object_mean
+        
+        # object_model.rescale(mesh_scale)
+        # object_model = object_model.mesh
+        # object_mean = np.mean(object_model.vertices, 0, keepdims=1)
+        # object_model.vertices -= object_mean
         # load bimanual grasp
+        
         grasps = np.asarray(h5_file['grasps/transforms'])
         grasps[:, :, :3, 3] -= object_mean
         

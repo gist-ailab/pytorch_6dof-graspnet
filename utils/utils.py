@@ -279,7 +279,7 @@ def get_gripper_pc(batch_size, npoints, use_torch=True):
 
     if use_torch:
         output = torch.tensor(output, torch.float32)
-        output = output.repeat(batch, size, 1, 1)
+        output = output.repeat(batch_size, 1, 1)
         return output
     else:
         output = np.tile(output, [batch_size, 1, 1])
@@ -349,6 +349,17 @@ def transform_control_points(gt_grasps, batch_size, mode='qt', device="cpu", is_
             rot_mat = torch.cat((rot_mat, pad_homog), dim=1) # (batch_size, 4, 4)
             return torch.matmul(control_points, rot_mat.permute(0,2,1))
         else:
+            # shape = control_points.shape
+            # ones = torch.ones((shape[0], shape[1], 1), dtype=torch.float64, device=device)
+            # control_points = torch.cat((control_points, ones), -1)
+            
+            # rs,ts = convert_qt_to_rt(gt_grasps, is_bimanual=is_bimanual, is_batched=True) #(batch_size, 3), (batch_size, 3)
+            # rot_mat_rs = tc_rotation_matrix(rs[:, 0], rs[:, 1], rs[:, 2], batched=True).permute(0,2,1) # (batch_size, 3, 3)
+            # rot_mat = torch.cat((rot_mat_rs, ts.unsqueeze(-1)), dim=-1) # (batch_size, 3, 4)
+            # pad_homog = torch.tensor([0, 0, 0, 1], dtype=torch.float64, device=device).unsqueeze(0).unsqueeze(0).repeat(batch_size, 1, 1)
+            # rot_mat = torch.cat((rot_mat, pad_homog), dim=1) # (batch_size, 4, 4)
+            # return torch.matmul(control_points, rot_mat.permute(0,2,1))
+            
             num_control_points = control_points.shape[1]
             input_gt_grasps = gt_grasps
 
@@ -360,7 +371,6 @@ def transform_control_points(gt_grasps, batch_size, mode='qt', device="cpu", is_
             
             gt_control_points = qrot(gt_q, control_points)
             gt_control_points += gt_t
-
             return gt_control_points
     else:
         assert (len(grasp_shape) == 3), grasp_shape
@@ -407,11 +417,14 @@ def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual
         ones = np.ones((shape[0], shape[1], 1), dtype=np.float32)
         control_points = np.concatenate((control_points, ones), -1) #(64, 6, 4)
         control_points_trans = copy.deepcopy(control_points)
+
         if is_bimanual:
             # should change x,y,z to x,-z,y because of the coordinate system
+
             control_points_trans[:, :, 2] = -control_points[:, :, 1]
             control_points_trans[:, :, 1] = control_points[:, :, 2]
             control_points = control_points_trans
+
 
         return np.matmul(control_points, np.transpose(gt_grasps, (0, 2, 1)))
         # return np.matmul(control_points, gt_grasps)
@@ -541,6 +554,7 @@ def control_points_from_rot_and_trans(grasp_eulers,
 
 def rot_and_trans_to_grasps(euler_angles, translations, selection_mask):
     grasps = []
+
     refine_indexes, sample_indexes = np.where(selection_mask)
     for refine_index, sample_index in zip(refine_indexes, sample_indexes):
         rt = tra.euler_matrix(*euler_angles[refine_index, sample_index, :])
@@ -552,6 +566,7 @@ def rot_and_trans_to_grasps(euler_angles, translations, selection_mask):
 def convert_qt_to_rt(grasps, is_bimanual=False, is_batched=False):
     if is_bimanual:
         Ts = grasps[:, 4:]
+        # Rs = qeuler(grasps[:, :4], "zyx", epsilon=1e-4)
         Rs = qeuler(grasps[:, :4], "zyx")
     else:
         Ts = grasps[:, 4:]

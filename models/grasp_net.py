@@ -124,6 +124,12 @@ class GraspNetModel:
                  
             self.kl_loss = self.opt.kl_loss_weight * self.criterion[0](
                     mu, logvar, device=self.device)
+            if torch.isnan(self.kl_loss) or torch.isnan(self.reconstruction_loss) or torch.isnan(self.confidence_loss):
+                print('kl_loss:', self.kl_loss)
+                print('reconstruction_loss:', self.reconstruction_loss)
+                print('confidence_loss:', self.confidence_loss)
+                exit()
+                
             self.loss = self.kl_loss + self.reconstruction_loss + self.confidence_loss
                 
         elif self.opt.arch == 'gan':
@@ -207,9 +213,21 @@ class GraspNetModel:
             prediction, confidence = out
             if vis:
                 if self.opt.arch == 'vae':
-                    predicted_cp = utils.transform_control_points(
-                        prediction, prediction.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)
-                    return predicted_cp[:,:,:3], self.targets, confidence
+                    if self.opt.is_bimanual:
+                        predicted_cp = utils.transform_control_points(
+                            prediction, prediction.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)
+                        return predicted_cp[:,:,:3], self.targets, confidence, self.grasps, prediction
+                    else:
+                        predicted_cp = utils.transform_control_points(
+                            prediction, prediction.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)
+                        return predicted_cp[:,:,:3], self.targets, confidence, self.grasps, prediction
+                if self.opt.arch == 'gan':
+                    if self.opt.is_bimanual:
+                        return 1
+                    else:
+                        predicted_cp = utils.transform_control_points(
+                                prediction, prediction.shape[0], device=self.device)
+                        return predicted_cp[:,:,:3], self.targets, confidence
                 
             else:    
                 if self.opt.arch == "vae":

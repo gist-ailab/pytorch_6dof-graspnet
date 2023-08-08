@@ -73,7 +73,7 @@ def define_classifier(opt, gpu_ids, arch, init_type, init_gain, device):
     net = None
     if arch == 'vae':
         net = GraspSamplerVAE(opt.model_scale, opt.pointnet_radius,
-                              opt.pointnet_nclusters, opt.latent_size, device, opt.is_bimanual_v2)
+                              opt.pointnet_nclusters, opt.latent_size, device, is_bimanual_v2=opt.is_bimanual_v2)
     elif arch == 'gan':
         net = GraspSamplerGAN(opt.model_scale, opt.pointnet_radius,
                               opt.pointnet_nclusters, opt.latent_size, device)
@@ -107,7 +107,7 @@ class GraspSampler(nn.Module):
         self.device = device
 
     def create_decoder(self, model_scale, pointnet_radius, pointnet_nclusters,
-                       num_input_features, is_bimanual_v2):
+                       num_input_features, is_bimanual_v2=False):
         # The number of input features for the decoder is 3+latent space where 3
         # represents the x, y, z position of the point-cloud
         if not is_bimanual_v2:
@@ -150,6 +150,7 @@ class GraspSampler(nn.Module):
     def concatenate_z_with_pc(self, pc, z):
         z.unsqueeze_(1)
         z = z.expand(-1, pc.shape[1], -1)
+
         return torch.cat((pc, z), -1)
 
     def get_latent_size(self):
@@ -219,10 +220,17 @@ class GraspSamplerVAE(GraspSampler):
             -1).transpose(-1, 1).contiguous()
 
         z = self.encode(pc, input_features) #(64, 1024)
-
         mu, logvar = self.bottleneck(z)
+        if torch.isnan(mu).any() or torch.isnan(logvar).any():
+            print("mu or logvar is nan")
         z = self.reparameterize(mu, logvar)
+        if torch.isnan(z).any():
+            print("z is nan")
+        
         qt, confidence = self.decode(pc, z, self.is_bimanual_v2)
+        if torch.isnan(qt).any() or torch.isnan(confidence).any():
+            print("qt or confidence is nan")
+            
         return qt, confidence, mu, logvar
             
     def forward_test(self, pc, grasp):
@@ -241,7 +249,7 @@ class GraspSamplerVAE(GraspSampler):
     def generate_grasps(self, pc, z=None):
         if z is None:
             z = self.sample_latent(pc.shape[0])
-        qt, confidence = self.decode(pc, z)
+        qt, confidence = self.decode(pc, z, self.is_bimanual_v2)
         return qt, confidence, z.squeeze()
 
     def generate_dense_latents(self, resolution):
