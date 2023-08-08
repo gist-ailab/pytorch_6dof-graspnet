@@ -116,11 +116,7 @@ class BimanualGraspSamplingData(BaseDataset):
         if not self.is_train:
             files = files[100:120]
         else:
-<<<<<<< HEAD
             files = files[:100] #3315
-=======
-            files = files[:100] # 3315
->>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
 
         return files
     
@@ -355,21 +351,17 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         path = self.paths[index]
         pos_grasps, pos_qualities, _, cad_path, cad_scale = self.read_grasp_file(path)
         meta = {}
-        #sample the grasp idx for data loader
-<<<<<<< HEAD
-        # if len(pos_grasps) < self.opt.num_grasps_per_object:
-        #     sampled_grasp_idxs = [i for i in range(len(pos_grasps))]
-        #     while len(sampled_grasp_idxs) > self.opt.num_grasps_per_object:
-        #         sampled_grasp_idxs = np.append(sampled_grasp_idxs, np.random.choice(len(pos_grasps), 1))
-        # else:
-        #     sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
+        # sample the grasp idx for data loader
+        if len(pos_grasps) < self.opt.num_grasps_per_object:
+            sampled_grasp_idxs = [i for i in range(len(pos_grasps))]
+            while len(sampled_grasp_idxs) > self.opt.num_grasps_per_object:
+                sampled_grasp_idxs = np.append(sampled_grasp_idxs, np.random.choice(len(pos_grasps), 1))
+        else:
+            sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
         # print(len(pos_grasps))
         # print(sampled_grasp_idxs)
         # exit()
-        sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
-=======
         # sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
->>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
         
         pos_grasp_idxs = np.where(pos_qualities.reshape(-1) > 0.85)[0]
         
