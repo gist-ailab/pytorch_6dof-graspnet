@@ -25,11 +25,13 @@ def main():
 
     dataset = DataLoader(opt)
     if opt.is_bimanual:
-        dataset_size = len(dataset)
+        dataset_size = len(dataset) * opt.num_grasps_per_object
     else:    
         dataset_size = len(dataset) * opt.num_grasps_per_object
 
+    
     model = create_model(opt)
+
     writer = Writer(opt)
     total_steps = 0
 

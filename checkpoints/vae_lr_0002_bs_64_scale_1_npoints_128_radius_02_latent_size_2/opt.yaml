@@ -3,7 +3,7 @@ arch: vae
 balanced_data: false
 batch_size: 64
 beta1: 0.9
-blacklisted_categories: mug
+blacklisted_categories: ''
 checkpoints_dir: ./checkpoints
 confidence_weight: 1.0
 continue_train: false
@@ -12,7 +12,7 @@ dataset_split: train
 depth_noise: 0.0
 epoch_count: 1
 gpu_ids:
-- 0
+- 7
 grasps_folder_name: grasps
 grasps_ratio: 1.0
 gripper: panda
@@ -21,6 +21,7 @@ init_gain: 0.02
 init_type: normal
 is_bimanual: false
 is_bimanual_v2: false
+is_dgcnn: false
 is_train: true
 kl_loss_weight: 0.01
 latent_size: 2

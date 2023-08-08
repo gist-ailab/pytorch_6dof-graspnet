@@ -123,10 +123,16 @@ class BimanualGraspSamplingData(BaseDataset):
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
         
         if not self.is_train:
+<<<<<<< HEAD
             # files = files[200:210]
             files = files[:50]
         else:
             files = files[:50]
+=======
+            files = files[100:120]
+        else:
+            files = files[:100] # 3315
+>>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
 
         return files
     
@@ -313,21 +319,52 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         file_list = os.listdir(os.path.join(self.opt.dataset_root_folder,
                                'grasps'))
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps', file) for file in file_list]
-        
-        if not self.is_train:
-            files = files[3315:]
-        else:
-            files = files[:3315]
+        files_proccessed = []
+        for file in files:
+            h5_file = h5py.File(file, 'r')
+            force_closure = np.array(h5_file["/grasps/qualities/Force_closure"])
+            torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
+            dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
+            
+            force_closure_weight = 0.4
+            torque_optimization_weight = 0.1
+            dexterity_weight = 0.5
+            
+            sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
+                            dexterity_weight * dexterity
 
-        return files
+            sum_quality = sum_quality.reshape(-1)
+            sum_quality_idx = np.where(sum_quality.reshape(-1) > 0.85)[0]
+
+            if len(sum_quality_idx) == 0:
+                print('no grasp quality is over 0.85')
+                continue
+            
+            files_proccessed.append(file)  
+            
+        if not self.is_train:
+            files_proccessed = files_proccessed[100:120]
+        else:
+            files_proccessed = files_proccessed[:100]
+
+        return files_proccessed
     
     def __getitem__(self, index):
         path = self.paths[index]
         pos_grasps, pos_qualities, _, cad_path, cad_scale = self.read_grasp_file(path)
         meta = {}
         #sample the grasp idx for data loader
-        sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
+        # sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
         
+        pos_grasp_idxs = np.where(pos_qualities.reshape(-1) > 0.85)[0]
+        
+        if len(pos_grasp_idxs) < self.opt.num_grasps_per_object:
+            sampled_grasp_idxs = pos_grasp_idxs
+            while len(sampled_grasp_idxs) < self.opt.num_grasps_per_object:
+                sampled_grasp_idxs = np.append(sampled_grasp_idxs, np.random.choice(pos_grasp_idxs, 1))
+        else:
+            sampled_grasp_idxs = np.random.choice(pos_grasp_idxs, self.opt.num_grasps_per_object)
+
         # render the scene to get pc and camera pose using pyrender
         pc, camera_pose, _ = self.change_object_and_render(
             cad_path,
@@ -350,9 +387,15 @@ class BimanualGraspSamplingDataV2(BaseDataset):
             output_grasps2.append(camera_pose.dot(selected_grasp[1]))
             
         gt_control_points1 = utils.transform_control_points_numpy(
+<<<<<<< HEAD
             np.array(output_grasps1), self.opt.num_grasps_per_object, mode='rt', is_bimanual=True) #(64, 6, 4)
         gt_control_points2 = utils.transform_control_points_numpy(
             np.array(output_grasps2), self.opt.num_grasps_per_object, mode='rt', is_bimanual=True) #(64, 6, 4)
+=======
+            np.array(output_grasps1), self.opt.num_grasps_per_object, mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2) #(64, 6, 4)
+        gt_control_points2 = utils.transform_control_points_numpy(
+            np.array(output_grasps2), self.opt.num_grasps_per_object, mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2) #(64, 6, 4)
+>>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
         
         meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
         meta['grasp_rt1'] = np.array(output_grasps1).reshape(
@@ -415,6 +458,7 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         mesh_scale = h5_file['object/scale'][()]
         # load and rescale, translate object mesh
         object_model = Object(os.path.join(root_folder, mesh_root, mesh_fname))
+<<<<<<< HEAD
         ###########* change object model transformation
         object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
         object_model.rescale(mesh_scale)
@@ -425,6 +469,17 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         # object_model = object_model.mesh
         # object_mean = np.mean(object_model.vertices, 0, keepdims=1)
         # object_model.vertices -= object_mean
+=======
+        # object_model.rescale(mesh_scale)
+        # object_model = object_model.mesh
+        # object_mean = np.mean(object_model.vertices, 0, keepdims=1)
+        # object_model.vertices -= object_mean
+        
+        object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
+        object_model.rescale(mesh_scale)
+        object_mean = object_model.mesh.centroid
+        object_model = object_model.mesh 
+>>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
         # load bimanual grasp
         
         grasps = np.asarray(h5_file['grasps/transforms'])
@@ -436,8 +491,8 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
         
         force_closure_weight = 0.4
-        torque_optimization_weight = 0.5
-        dexterity_weight = 0.1
+        torque_optimization_weight = 0.1
+        dexterity_weight = 0.5
         
         sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
                         dexterity_weight * dexterity

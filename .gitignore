@@ -5,5 +5,9 @@
 /Pointnet2_PyTorch
 /*.tar.gz
 /checkpoints
+<<<<<<< HEAD
 checkpoints/*.yaml
 /checkpoints/*.txt
+=======
+checkpoints/*
+>>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8

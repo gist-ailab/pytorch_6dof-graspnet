@@ -382,7 +382,7 @@ def transform_control_points(gt_grasps, batch_size, mode='qt', device="cpu", is_
         return torch.matmul(control_points, gt_grasps.permute(0, 2, 1))
 
 
-def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual=False):
+def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual=False, is_bimanual_v2=False):
     """
       Transforms canonical points using gt_grasps.
       mode = 'qt' expects gt_grasps to have (batch_size x 7) where each 
@@ -411,21 +411,30 @@ def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual
     else:
         assert (len(grasp_shape) == 3), grasp_shape
         assert (grasp_shape[1] == 4 and grasp_shape[2] == 4), grasp_shape
-        control_points = get_control_point_tensor(batch_size, use_torch=False, is_bimanual=is_bimanual)
+        control_points = get_control_point_tensor(batch_size, use_torch=False, is_bimanual=is_bimanual, is_bimanual_v2=is_bimanual_v2)
         shape = control_points.shape
 
         ones = np.ones((shape[0], shape[1], 1), dtype=np.float32)
         control_points = np.concatenate((control_points, ones), -1) #(64, 6, 4)
         control_points_trans = copy.deepcopy(control_points)
+<<<<<<< HEAD
 
         if is_bimanual:
+=======
+        if is_bimanual or is_bimanual_v2:
+>>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
             # should change x,y,z to x,-z,y because of the coordinate system
 
             control_points_trans[:, :, 2] = -control_points[:, :, 1]
             control_points_trans[:, :, 1] = control_points[:, :, 2]
             control_points = control_points_trans
 
+<<<<<<< HEAD
 
+=======
+            
+        
+>>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
         return np.matmul(control_points, np.transpose(gt_grasps, (0, 2, 1)))
         # return np.matmul(control_points, gt_grasps)
 
@@ -566,8 +575,12 @@ def rot_and_trans_to_grasps(euler_angles, translations, selection_mask):
 def convert_qt_to_rt(grasps, is_bimanual=False, is_batched=False):
     if is_bimanual:
         Ts = grasps[:, 4:]
+<<<<<<< HEAD
         # Rs = qeuler(grasps[:, :4], "zyx", epsilon=1e-4)
         Rs = qeuler(grasps[:, :4], "zyx")
+=======
+        Rs = qeuler(grasps[:, :4], "zyx", epsilon=1e-4)
+>>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
     else:
         Ts = grasps[:, 4:]
         Rs = qeuler(grasps[:, :4], "zyx")

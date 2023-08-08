@@ -12,7 +12,9 @@ dataset_split: train
 depth_noise: 0.0
 epoch_count: 1
 gpu_ids:
-- 0
+- 1
+- 3
+- 4
 grasps_folder_name: grasps
 grasps_ratio: 1.0
 gripper: panda
@@ -38,7 +40,11 @@ npoints: 1024
 num_grasp_clusters: 32
 num_grasps_per_object: 64
 num_objects_per_batch: 1
+<<<<<<< HEAD
 num_threads: 1
+=======
+num_threads: 32
+>>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
 occlusion_dropout_rate: 0
 occlusion_nclusters: 0
 phase: train
@@ -48,7 +54,7 @@ print_freq: 100
 run_test_freq: 1
 save_epoch_freq: 1
 save_latest_freq: 250
-seed: null
+seed: 7
 serial_batches: false
 skip_error: false
 splits_folder_name: splits
