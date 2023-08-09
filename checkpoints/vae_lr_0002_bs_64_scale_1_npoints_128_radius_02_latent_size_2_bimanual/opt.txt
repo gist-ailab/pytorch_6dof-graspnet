@@ -12,7 +12,11 @@ dataset_root_folder: da2_dataset
 dataset_split: train
 depth_noise: 0.0
 epoch_count: 1
+<<<<<<< HEAD
 gpu_ids: [1, 3, 4]
+=======
+gpu_ids: [3, 4, 5, 6]
+>>>>>>> parent of 8e7d966... Feat: add bimanual grasp v2 + whole point cloud which name is bimanual grasp v3
 grasps_folder_name: grasps
 grasps_ratio: 1.0
 gripper: panda
@@ -21,6 +25,10 @@ init_gain: 0.02
 init_type: normal
 is_bimanual: True
 is_bimanual_v2: False
+<<<<<<< HEAD
+=======
+is_dgcnn: False
+>>>>>>> parent of 8e7d966... Feat: add bimanual grasp v2 + whole point cloud which name is bimanual grasp v3
 is_train: True
 kl_loss_weight: 0.01
 latent_size: 2
@@ -39,20 +47,32 @@ num_grasp_clusters: 32
 num_grasps_per_object: 64
 num_objects_per_batch: 1
 <<<<<<< HEAD
+<<<<<<< HEAD
 num_threads: 1
 =======
 num_threads: 32
 >>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
+=======
+num_threads: 1
+>>>>>>> parent of 8e7d966... Feat: add bimanual grasp v2 + whole point cloud which name is bimanual grasp v3
 occlusion_dropout_rate: 0
 occlusion_nclusters: 0
 phase: train
 pointnet_nclusters: 128
 pointnet_radius: 0.02
+<<<<<<< HEAD
 print_freq: 100
 run_test_freq: 1
 save_epoch_freq: 1
 save_latest_freq: 250
 seed: 7
+=======
+print_freq: 300
+run_test_freq: 1
+save_epoch_freq: 1
+save_latest_freq: 250
+seed: None
+>>>>>>> parent of 8e7d966... Feat: add bimanual grasp v2 + whole point cloud which name is bimanual grasp v3
 serial_batches: False
 skip_error: False
 splits_folder_name: splits

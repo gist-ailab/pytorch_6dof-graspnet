@@ -1,4 +1,5 @@
 <<<<<<< HEAD
+<<<<<<< HEAD
 ================ Training Loss (Tue Aug  8 00:19:26 2023) ================
 =======
 ================ Training Loss (Tue Aug  1 17:55:14 2023) ================
@@ -4203,3 +4204,6 @@
 (epoch: 2100, iters: 1600, time: 0.001, data: 6.274) total_loss: 0.011596 kl_loss: 0.007162 reconstruction_loss: 0.004434 confidence loss: -0.000000
 (epoch: 2100, iters: 3200, time: 0.001, data: 0.000) total_loss: 0.010920 kl_loss: 0.007375 reconstruction_loss: 0.003545 confidence loss: 0.000000
 >>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
+=======
+================ Training Loss (Sat Aug  5 12:20:05 2023) ================
+>>>>>>> parent of 8e7d966... Feat: add bimanual grasp v2 + whole point cloud which name is bimanual grasp v3

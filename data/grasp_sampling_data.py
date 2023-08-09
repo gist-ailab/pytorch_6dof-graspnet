@@ -386,18 +386,18 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         while len(final_grasps_idxs) == 0:
             pos_grasp_idxs = np.where(pos_qualities.reshape(-1) > 0.85)[0]
         # render the scene to get pc and camera pose using pyrender
-        pc, camera_pose, _ = self.change_object_and_render(
-            cad_path,
-            cad_scale,
-            thread_id=torch.utils.data.get_worker_info().id
-            if torch.utils.data.get_worker_info() else 0)
-        
-        # get the grasp and quality for the sampled grasp idx
-        output_qualities = []
-        output_grasps1 = []
-        output_grasps2 = []
-        for iter in range(self.opt.num_grasps_per_object):
-            selected_grasp_index = sampled_grasp_idxs[iter]
+            pc, camera_pose, _ = self.change_object_and_render(
+                cad_path,
+                cad_scale,
+                thread_id=torch.utils.data.get_worker_info().id
+                if torch.utils.data.get_worker_info() else 0)
+            
+            # get the grasp and quality for the sampled grasp idx
+            pos_gt_control_points1 = []
+            pos_gt_control_points2 = []
+            pos_output_grasp1 = []
+            pos_output_grasp2 = []
+            pos_output_quality = []    
 
             selected_grasp = pos_grasps[selected_grasp_index]
             selected_quality = pos_qualities[selected_grasp_index]
