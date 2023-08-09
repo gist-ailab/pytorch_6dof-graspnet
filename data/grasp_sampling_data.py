@@ -378,7 +378,7 @@ class BimanualGraspSamplingDataV2(BaseDataset):
                 cad_scale,
                 thread_id=torch.utils.data.get_worker_info().id
                 if torch.utils.data.get_worker_info() else 0)
-
+            
             # get the grasp and quality for the sampled grasp idx
             pos_gt_control_points1 = []
             pos_gt_control_points2 = []
@@ -676,8 +676,8 @@ class BimanualGraspSamplingDataV3(BaseDataset):
         meta = {}
         
         #sample grasp idx for data loading
-        sampled_grasp_idxs = np.random.choice(len(pos_grasps), self.opt.num_grasps_per_object, replace=False)
-        
+        sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object, replace=False)
+
         #* sample whole point cloud from mesh model
         # load trimesh object
         # object_mesh = trimesh.load(cad_path)
@@ -690,6 +690,7 @@ class BimanualGraspSamplingDataV3(BaseDataset):
 
         # sample points from the object
         pc = object_model.sample(self.opt.npoints)
+        pc = pc.astype(np.float32)
         output_grasps1 = pos_grasps[:, 0, :, :]
         output_grasps2 = pos_grasps[:, 1, :, :]
         # output_grasps1 = output_grasps1[:, 3, :3]
@@ -700,6 +701,7 @@ class BimanualGraspSamplingDataV3(BaseDataset):
             np.array(output_grasps1), len(output_grasps1), mode='rt', is_bimanual_v2=True)
         gt_control_points2 = utils.transform_control_points_numpy(
             np.array(output_grasps2), len(output_grasps2), mode='rt', is_bimanual_v2=True)
+        
         
         output_grasps1 = output_grasps1[sampled_grasp_idxs]
         output_grasps2 = output_grasps2[sampled_grasp_idxs]

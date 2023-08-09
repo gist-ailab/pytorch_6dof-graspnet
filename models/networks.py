@@ -224,6 +224,8 @@ class GraspSamplerVAE(GraspSampler):
             return self.encoder[1](xyz_features.squeeze(-1))
         else:
             for module in self.encoder[0]:
+                # print()
+                # print(xyz.type(), xyz_features.type())
                 xyz, xyz_features = module(xyz, xyz_features)
             return self.encoder[1](xyz_features.squeeze(-1))
 
