@@ -107,7 +107,7 @@ class GraspSampler(nn.Module):
         self.device = device
 
     def create_decoder(self, model_scale, pointnet_radius, pointnet_nclusters,
-                       num_input_features, is_bimanual_v2, is_dgcnn=False):
+                       num_input_features, is_bimanual_v2=False, is_dgcnn=False):
         # The number of input features for the decoder is 3+latent space where 3
         # represents the x, y, z position of the point-cloud
         if not is_bimanual_v2:
@@ -317,11 +317,11 @@ class GraspSamplerGAN(GraspSampler):
         self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
                             latent_size + 3)
 
-    def sample_latent(self, batch_size):
-        return torch.rand(batch_size, self.latent_size).to(self.device)
+    def sample_latent(self, batch_size, device=None):
+        return torch.rand(batch_size, self.latent_size).to(device)
 
     def forward(self, pc, grasps=None, train=True):
-        z = self.sample_latent(pc.shape[0])
+        z = self.sample_latent(pc.shape[0], device=pc.device)
         return self.decode(pc, z)
 
     def generate_grasps(self, pc, z=None):
@@ -429,6 +429,7 @@ def base_network(pointnet_radius, pointnet_nclusters, scale, in_features, is_dgc
                                 nn.Linear(1024 * scale, 1024 * scale),
                                 nn.BatchNorm1d(1024 * scale), nn.ReLU(True))
         return nn.ModuleList([sa_modules, fc_layer])
+
 
 class BaseDgcnn(nn.Module):
     def __init__(self, opt=None, input_feature=None, device='cuda'):

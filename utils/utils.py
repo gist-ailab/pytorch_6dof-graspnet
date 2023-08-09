@@ -293,13 +293,17 @@ def get_control_point_tensor(batch_size, use_torch=True, device="cpu", is_bimanu
       use_tf: switches between outputing a tensor and outputing a numpy array.
     """
     
-    control_points = np.load('./gripper_control_points/panda.npy')[:, :3]
-    if is_bimanual or is_bimanual_v2:
-        control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, -7.27595772e-12, 0],
-                          [-0.0425, -7.27595772e-12, 0], [0.0425, -7.27595772e-12, 0.0675],
-                          [-0.0425, -7.27595772e-12, 0.0675]]
+    
+    if is_bimanual:
+        # control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, -7.27595772e-12, 0],
+        #                   [-0.0425, -7.27595772e-12, 0], [0.0425, -7.27595772e-12, 0.0675],
+        #                   [-0.0425, -7.27595772e-12, 0.0675]]
+        control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, 0, 0],
+                          [-0.0425, 0, 0], [0.0425, 0, 0.0675],
+                          [-0.0425, 0, 0.0675]]
         
     else:
+        control_points = np.load('./gripper_control_points/panda.npy')[:, :3]
         control_points = [[0, 0, 0], [0, 0, 0], control_points[0, :],
                         control_points[1, :], control_points[-2, :],
                         control_points[-1, :]]

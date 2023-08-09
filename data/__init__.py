@@ -7,11 +7,13 @@ def CreateDataset(opt, is_train=True):
     """loads dataset class"""
 
     if opt.arch == 'vae' or opt.arch == 'gan':
-        from data.grasp_sampling_data import GraspSamplingData, BimanualGraspSamplingData, BimanualGraspSamplingDataV2
+        from data.grasp_sampling_data import GraspSamplingData, BimanualGraspSamplingData, BimanualGraspSamplingDataV2, BimanualGraspSamplingDataV3
         if opt.is_bimanual:
             dataset = BimanualGraspSamplingData(opt, is_train=is_train)
-        elif opt.is_bimanual_v2:
+        elif opt.is_bimanual_v2 and not opt.is_bimanual_v3:
             dataset = BimanualGraspSamplingDataV2(opt, is_train=is_train)
+        elif opt.is_bimanual_v3 and opt.is_bimanual_v2:
+            dataset = BimanualGraspSamplingDataV3(opt, is_train=is_train)
         else:
             dataset = GraspSamplingData(opt)
     else:
