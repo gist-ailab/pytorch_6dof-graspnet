@@ -26,7 +26,6 @@ def main(epoch=-1, name="", is_train=True):
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     
     for i, data in enumerate(dataset):
-<<<<<<< HEAD
         pc_np = data['pc']
         
         #* vis gt grasp is valid
@@ -123,11 +122,6 @@ def main(epoch=-1, name="", is_train=True):
         #     prediction, target, condfidence, grasp_rt, prediction_q = model.test(vis=True)
         #     grasp_rt = grasp_rt.cpu().detach().numpy()
         #     grasp_rt = grasp_rt.reshape(-1,4,4)
-=======
-        model.set_input(data)
-        
-        prediction, target, condfidence = model.test(vis=True)
->>>>>>> parent of 291805a... Feat: merge lecun and local
         
         prediction = prediction.cpu().detach().numpy()
         target = target.cpu().detach().numpy()
