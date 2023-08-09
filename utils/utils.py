@@ -279,7 +279,7 @@ def get_gripper_pc(batch_size, npoints, use_torch=True):
 
     if use_torch:
         output = torch.tensor(output, torch.float32)
-        output = output.repeat(batch_size, 1, 1)
+        output = output.repeat(batch, size, 1, 1)
         return output
     else:
         output = np.tile(output, [batch_size, 1, 1])
@@ -294,7 +294,6 @@ def get_control_point_tensor(batch_size, use_torch=True, device="cpu", is_bimanu
     """
     
     
-<<<<<<< HEAD
     if is_bimanual or is_bimanual_v2:
         # control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, -7.27595772e-12, 0],
         #                   [-0.0425, -7.27595772e-12, 0], [0.0425, -7.27595772e-12, 0.0675],
@@ -302,12 +301,6 @@ def get_control_point_tensor(batch_size, use_torch=True, device="cpu", is_bimanu
         control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, 0, 0],
                           [-0.0425, 0, 0], [0.0425, 0, 0.0675],
                           [-0.0425, 0, 0.0675]]
-=======
-    if is_bimanual:
-        control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, -7.27595772e-12, 0],
-                          [-0.0425, -7.27595772e-12, 0], [0.0425, -7.27595772e-12, 0.0675],
-                          [-0.0425, -7.27595772e-12, 0.0675]]
->>>>>>> parent of 8e7d966... Feat: add bimanual grasp v2 + whole point cloud which name is bimanual grasp v3
         
     else:
         control_points = np.load('./gripper_control_points/panda.npy')[:, :3]
@@ -360,17 +353,6 @@ def transform_control_points(gt_grasps, batch_size, mode='qt', device="cpu", is_
             rot_mat = torch.cat((rot_mat, pad_homog), dim=1) # (batch_size, 4, 4)
             return torch.matmul(control_points, rot_mat.permute(0,2,1))
         else:
-            # shape = control_points.shape
-            # ones = torch.ones((shape[0], shape[1], 1), dtype=torch.float64, device=device)
-            # control_points = torch.cat((control_points, ones), -1)
-            
-            # rs,ts = convert_qt_to_rt(gt_grasps, is_bimanual=is_bimanual, is_batched=True) #(batch_size, 3), (batch_size, 3)
-            # rot_mat_rs = tc_rotation_matrix(rs[:, 0], rs[:, 1], rs[:, 2], batched=True).permute(0,2,1) # (batch_size, 3, 3)
-            # rot_mat = torch.cat((rot_mat_rs, ts.unsqueeze(-1)), dim=-1) # (batch_size, 3, 4)
-            # pad_homog = torch.tensor([0, 0, 0, 1], dtype=torch.float64, device=device).unsqueeze(0).unsqueeze(0).repeat(batch_size, 1, 1)
-            # rot_mat = torch.cat((rot_mat, pad_homog), dim=1) # (batch_size, 4, 4)
-            # return torch.matmul(control_points, rot_mat.permute(0,2,1))
-            
             num_control_points = control_points.shape[1]
             input_gt_grasps = gt_grasps
 
@@ -382,6 +364,7 @@ def transform_control_points(gt_grasps, batch_size, mode='qt', device="cpu", is_
             
             gt_control_points = qrot(gt_q, control_points)
             gt_control_points += gt_t
+
             return gt_control_points
     else:
         assert (len(grasp_shape) == 3), grasp_shape
@@ -564,7 +547,6 @@ def control_points_from_rot_and_trans(grasp_eulers,
 
 def rot_and_trans_to_grasps(euler_angles, translations, selection_mask):
     grasps = []
-
     refine_indexes, sample_indexes = np.where(selection_mask)
     for refine_index, sample_index in zip(refine_indexes, sample_indexes):
         rt = tra.euler_matrix(*euler_angles[refine_index, sample_index, :])
