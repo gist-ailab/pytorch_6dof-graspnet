@@ -116,7 +116,7 @@ class BimanualGraspSamplingData(BaseDataset):
         if not self.is_train:
             files = files[100:120]
         else:
-            files = files[:100] #3315
+            files = files[:100] # 3315
 
         return files
     
@@ -151,6 +151,11 @@ class BimanualGraspSamplingData(BaseDataset):
         gt_control_points = utils.transform_control_points_numpy(
             np.array(output_grasps), self.opt.num_grasps_per_object, mode='rt', is_bimanual=self.opt.is_bimanual) #(64, 6, 4)
 
+        
+            
+        
+        
+        
         meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
         meta['grasp_rt'] = np.array(output_grasps).reshape(
             len(output_grasps), -1)
@@ -299,46 +304,158 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         file_list = os.listdir(os.path.join(self.opt.dataset_root_folder,
                                'grasps'))
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps', file) for file in file_list]
-        
-        if not self.is_train:
-            files = files[200:250]
-        else:
-            files = files[:200]
+        files_proccessed = []
+        for file in files:
+            h5_file = h5py.File(file, 'r')
+            force_closure = np.array(h5_file["/grasps/qualities/Force_closure"])
+            torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
+            dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
+            
+            force_closure_weight = 0.4
+            torque_optimization_weight = 0.1
+            dexterity_weight = 0.5
+            
+            sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
+                            dexterity_weight * dexterity
 
-        return files
+            sum_quality = sum_quality.reshape(-1)
+            sum_quality_idx = np.where(sum_quality.reshape(-1) > 0.85)[0]
+
+            if len(sum_quality_idx) == 0:
+                print('no grasp quality is over 0.85')
+                continue
+            
+            files_proccessed.append(file)  
+            
+        if not self.is_train:
+            files_proccessed = files_proccessed[1000:1200]
+        else:
+            files_proccessed = files_proccessed[:1000]
+
+        return files_proccessed
     
     def __getitem__(self, index):
         path = self.paths[index]
         pos_grasps, pos_qualities, _, cad_path, cad_scale = self.read_grasp_file(path)
         meta = {}
         #sample the grasp idx for data loader
-        sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
         
+        # sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
+        
+        final_grasps_idxs =[]
+        while len(final_grasps_idxs) == 0:
+            pos_grasp_idxs = np.where(pos_qualities.reshape(-1) > 0.85)[0]
         # render the scene to get pc and camera pose using pyrender
-        pc, camera_pose, _ = self.change_object_and_render(
-            cad_path,
-            cad_scale,
-            thread_id=torch.utils.data.get_worker_info().id
-            if torch.utils.data.get_worker_info() else 0)
-        
-        # get the grasp and quality for the sampled grasp idx
-        output_qualities = []
-        output_grasps1 = []
-        output_grasps2 = []
-        for iter in range(self.opt.num_grasps_per_object):
-            selected_grasp_index = sampled_grasp_idxs[iter]
-
-            selected_grasp = pos_grasps[selected_grasp_index]
-            selected_quality = pos_qualities[selected_grasp_index]
-            output_qualities.append(selected_quality)
-
-            output_grasps1.append(camera_pose.dot(selected_grasp[0])) #(64, 4, 4)
-            output_grasps2.append(camera_pose.dot(selected_grasp[1]))
+            pc, camera_pose, _ = self.change_object_and_render(
+                cad_path,
+                cad_scale,
+                thread_id=torch.utils.data.get_worker_info().id
+                if torch.utils.data.get_worker_info() else 0)
             
-        gt_control_points1 = utils.transform_control_points_numpy(
-            np.array(output_grasps1), self.opt.num_grasps_per_object, mode='rt') #(64, 6, 4)
-        gt_control_points2 = utils.transform_control_points_numpy(
-            np.array(output_grasps2), self.opt.num_grasps_per_object, mode='rt') #(64, 6, 4)
+            # get the grasp and quality for the sampled grasp idx
+            pos_gt_control_points1 = []
+            pos_gt_control_points2 = []
+            pos_output_grasp1 = []
+            pos_output_grasp2 = []
+            pos_output_quality = []    
+
+            pos_grasps = pos_grasps[pos_grasp_idxs]
+            pos_qualities = pos_qualities[pos_grasp_idxs]
+            output_grasps1 = camera_pose.dot(pos_grasps[:, 0, :, :])
+            output_grasps1 = output_grasps1.transpose(1, 0, 2)
+            output_grasps2 = camera_pose.dot(pos_grasps[:, 1, :, :])
+            output_grasps2 = output_grasps2.transpose(1, 0, 2)
+            
+            gt_control_points1 = utils.transform_control_points_numpy(
+                np.array(output_grasps1), len(output_grasps1), mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2)
+            gt_control_points2 = utils.transform_control_points_numpy(
+                np.array(output_grasps2), len(output_grasps2), mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2) #(2001, 6, 4)
+            
+            middle_points1 = (gt_control_points1[:, 4, :3]+gt_control_points1[:, 5, :3])/2
+            middle_points2 = (gt_control_points2[:, 4, :3]+gt_control_points2[:, 5, :3])/2
+            
+            pc_tmp = np.expand_dims(pc, axis=0)
+            middle_points1 = np.expand_dims(middle_points1, axis=1)
+            middle_points2 = np.expand_dims(middle_points2, axis=1)
+            dist1 = np.min(np.linalg.norm(pc_tmp[:, :, :3] - middle_points1, axis=2), axis=1)
+            dist2 = np.min(np.linalg.norm(pc_tmp[:, :, :3] - middle_points2, axis=2), axis=1)
+
+            banned_idxs = np.where((dist1 > 0.1) | (dist2 > 0.1))[0]
+            pos_grasp_idxs = range(len(pos_grasps))
+            pos_grasp_idxs = np.delete(pos_grasp_idxs, banned_idxs)
+
+            final_grasps_idxs = pos_grasp_idxs
+            if len(final_grasps_idxs) == 0:
+                print('no grasp near partial point cloud')
+                print('again rendering')
+                print('cad_path', cad_path)
+                print('-------------------')
+                continue
+            
+            sampled_grasp_idxs = np.random.choice(pos_grasp_idxs, self.opt.num_grasps_per_object)
+            output_grasps1 = output_grasps1[sampled_grasp_idxs]
+            output_grasps2 = output_grasps2[sampled_grasp_idxs]
+            gt_control_points1 = gt_control_points1[sampled_grasp_idxs]
+            gt_control_points2 = gt_control_points2[sampled_grasp_idxs]
+            output_qualities = pos_qualities[sampled_grasp_idxs]
+        
+
+            
+        # while len(pos_gt_control_points1) < self.opt.num_grasps_per_object:
+        #     output_qualities = []
+        #     output_grasps1 = []
+        #     output_grasps2 = []
+        #     banned_grasp_idxs = []
+            
+        #     target_num_grasps = self.opt.num_grasps_per_object - len(pos_gt_control_points1)
+        #     pos_grasp_idxs = np.delete(pos_grasp_idxs, banned_grasp_idxs)
+        #     sampled_grasp_idxs = np.random.choice(pos_grasp_idxs, target_num_grasps)
+            
+        #     for iter in range(target_num_grasps):
+        #         selected_grasp_index = sampled_grasp_idxs[iter]
+
+        #         selected_grasp = pos_grasps[selected_grasp_index]
+        #         selected_quality = pos_qualities[selected_grasp_index]
+        #         output_qualities.append(selected_quality)
+
+        #         output_grasps1.append(camera_pose.dot(selected_grasp[0])) #(64, 4, 4)
+        #         output_grasps2.append(camera_pose.dot(selected_grasp[1]))
+                
+        #     gt_control_points1 = utils.transform_control_points_numpy(
+        #         np.array(output_grasps1), target_num_grasps, mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2) #(64, 6, 4)
+        #     gt_control_points2 = utils.transform_control_points_numpy(
+        #         np.array(output_grasps2), target_num_grasps, mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2) #(64, 6, 4)
+            
+        #     # check if the grasp point is near the object point cloud
+        #     # if not, sample another grasp point
+        #     for i in range(target_num_grasps):
+        #         target_cps1 = gt_control_points1[i][:, :3]
+        #         target_cps2 = gt_control_points2[i][:, :3]
+        #         middle_point1 = (target_cps1[4] + target_cps1[5]) / 2
+        #         middle_point2 = (target_cps2[4] + target_cps2[5]) / 2
+                
+        #         # check if the middle point1 is near the object point cloud by threashold distacne
+        #         dist1 = np.linalg.norm(pc[:, :3] - middle_point1, axis=1)
+        #         dist2 = np.linalg.norm(pc[:, :3] - middle_point2, axis=1)
+        #         if np.min(dist1) > 0.1 or np.min(dist2) > 0.1:
+        #             banned_grasp_idxs.append(selected_grasp_index)
+        #             # print('dist1 or dist2 is too far')
+        #             continue
+        #         else:
+        #             pos_gt_control_points1.append(target_cps1)
+        #             pos_gt_control_points2.append(target_cps2)
+        #             pos_output_grasp1.append(output_grasps1[i])
+        #             pos_output_grasp2.append(output_grasps2[i])
+        #             pos_output_quality.append(output_qualities[i])
+            
+            
+            
+        # output_grasps1 = copy.deepcopy(np.asarray(pos_output_grasp1))
+        # output_grasps2 = copy.deepcopy(np.asarray(pos_output_grasp2))
+        # output_qualities = copy.deepcopy(np.asarray(pos_output_quality))
+        # gt_control_points1 = copy.deepcopy(np.asarray(pos_gt_control_points1))
+        # gt_control_points2 = copy.deepcopy(np.asarray(pos_gt_control_points2))
+        
         
         meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
         meta['grasp_rt1'] = np.array(output_grasps1).reshape(
@@ -420,8 +537,8 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
         
         force_closure_weight = 0.4
-        torque_optimization_weight = 0.5
-        dexterity_weight = 0.1
+        torque_optimization_weight = 0.1
+        dexterity_weight = 0.5
         
         sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
                         dexterity_weight * dexterity
