@@ -11,6 +11,7 @@ from time import time
 from tqdm import tqdm
 import open3d as o3d
 from autolab_core import RigidTransform
+import trimesh
 
 class GraspSamplingData(BaseDataset):
     def __init__(self, opt):
@@ -378,7 +379,7 @@ class BimanualGraspSamplingDataV2(BaseDataset):
                 cad_scale,
                 thread_id=torch.utils.data.get_worker_info().id
                 if torch.utils.data.get_worker_info() else 0)
-            
+
             # get the grasp and quality for the sampled grasp idx
             pos_gt_control_points1 = []
             pos_gt_control_points2 = []
@@ -618,3 +619,176 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         
         return index_list
 
+class BimanualGraspSamplingDataV3(BaseDataset):
+    def __init__(self, opt, is_train=True):
+        BaseDataset.__init__(self, opt)
+        self.opt = opt
+        self.device = torch.device('cuda:{}'.format(
+            opt.gpu_ids[0])) if opt.gpu_ids else torch.device('cpu')
+        self.root = opt.dataset_root_folder
+        # self.paths = self.make_dataset()
+        # self.size = len(self.paths)
+        #self.get_mean_std()
+        opt.input_nc = self.ninput_channels
+        self.is_train = is_train
+        self.paths = self.make_dataset()
+        self.size = len(self.paths)
+        self.i = 0
+        
+    def make_dataset(self):
+        files = []
+        file_list = os.listdir(os.path.join(self.opt.dataset_root_folder,
+                               'grasps'))
+        files = [os.path.join(self.opt.dataset_root_folder, 'grasps', file) for file in file_list]
+        files_proccessed = []
+        for file in files:
+            h5_file = h5py.File(file, 'r')
+            force_closure = np.array(h5_file["/grasps/qualities/Force_closure"])
+            torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
+            dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
+            
+            force_closure_weight = 0.4
+            dexterity_weight = 0.5
+            torque_optimization_weight = 0.1
+            
+            
+            sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
+                            dexterity_weight * dexterity
+
+            sum_quality = sum_quality.reshape(-1)
+            sum_quality_idx = np.where(sum_quality.reshape(-1) > 0.85)[0]
+
+            if len(sum_quality_idx) == 0:
+                print('no grasp quality is over 0.85')
+                continue
+            
+            files_proccessed.append(file)  
+            
+        if not self.is_train:
+            files_proccessed = files_proccessed[100:120]
+        else:
+            files_proccessed = files_proccessed[:100]
+
+        return files_proccessed
+    
+    def __getitem__(self, index):
+        path = self.paths[index]
+        pos_grasps, pos_qualities, _, cad_path, cad_scale = self.read_grasp_file(path)
+        meta = {}
+        
+        #sample grasp idx for data loading
+        sampled_grasp_idxs = np.random.choice(len(pos_grasps), self.opt.num_grasps_per_object, replace=False)
+        
+        #* sample whole point cloud from mesh model
+        # load trimesh object
+        object_mesh = trimesh.load(cad_path)
+        if isinstance(object_mesh, list):
+            object_mesh = trimesh.util.concatenate(object_mesh)
+        # scale and center the object
+        object_mesh.apply_scale(cad_scale)
+        object_mesh_mean = np.mean(object_mesh.vertices, axis=0)
+        object_mesh.vertices -= object_mesh_mean
+        # sample points from the object
+        pc = object_mesh.sample(self.opt.npoints)
+        output_grasps1 = pos_grasps[:, 0, :, :]
+        output_grasps2 = pos_grasps[:, 1, :, :]
+        # output_grasps1 = output_grasps1[:, 3, :3]
+        output_grasps1[:, :3, 3] = output_grasps1[:, :3, 3] - object_mesh_mean
+        output_grasps2[:, :3, 3] = output_grasps2[:, :3, 3] - object_mesh_mean
+        
+        gt_control_points1 = utils.transform_control_points_numpy(
+            np.array(output_grasps1), len(output_grasps1), mode='rt', is_bimanual_v2=True)
+        gt_control_points2 = utils.transform_control_points_numpy(
+            np.array(output_grasps2), len(output_grasps2), mode='rt', is_bimanual_v2=True)
+        
+        output_grasps1 = output_grasps1[sampled_grasp_idxs]
+        output_grasps2 = output_grasps2[sampled_grasp_idxs]
+        gt_control_points1 = gt_control_points1[sampled_grasp_idxs]
+        gt_control_points2 = gt_control_points2[sampled_grasp_idxs]
+        output_qualities = pos_qualities[sampled_grasp_idxs]
+        
+        meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
+        meta['grasp_rt1'] = np.array(output_grasps1).reshape(
+            len(output_grasps1), -1)
+        meta['grasp_rt2'] = np.array(output_grasps2).reshape(
+            len(output_grasps2), -1)
+        # meta['pc_pose'] = np.array([utils.inverse_transform(camera_pose)] *
+        #                            self.opt.num_grasps_per_object)
+        meta['cad_path'] = np.array([cad_path] *
+                                    self.opt.num_grasps_per_object)
+        meta['cad_scale'] = np.array([cad_scale] *
+                                     self.opt.num_grasps_per_object)
+        meta['quality'] = np.array(output_qualities)
+        meta['target_cps1'] = np.array(gt_control_points1[:, :, :3])
+        meta['target_cps2'] = np.array(gt_control_points2[:, :, :3])
+        return meta
+        
+        
+    def __len__(self):
+        return self.size
+    
+    def read_grasp_file(self, path, return_all_grasps=False):
+        file_name = path
+        if self.caching and file_name in self.cache:
+            pos_grasps, pos_qualities, cad, cad_path, cad_scale = copy.deepcopy(
+                self.cache[file_name])
+            return pos_grasps, pos_qualities, cad, cad_path, cad_scale
+
+        pos_grasps, pos_qualities, cad, cad_path, cad_scale = self.read_object_grasp_data(
+            path,
+            ratio_of_grasps_to_be_used=self.opt.grasps_ratio,
+            return_all_grasps=return_all_grasps)
+
+        if self.caching:
+            self.cache[file_name] = (pos_grasps, pos_qualities, cad, cad_path, cad_scale)
+            return copy.deepcopy(self.cache[file_name])
+        
+        return pos_grasps, pos_qualities, cad, cad_path, cad_scale
+    
+    def read_object_grasp_data(self, 
+                               h5_path, 
+                               quality=['Dexterity', 'Force_closure', 'Torque_optimization'], 
+                               ratio_of_grasps_to_be_used=1, 
+                               return_all_grasps=False):
+        
+        num_clusters = 16
+        root_folder = self.opt.dataset_root_folder
+        mesh_root = 'meshes'
+        
+        if num_clusters <= 0:
+            raise NoPositiveGraspsException
+        
+        # read h5 grasp file
+        h5_file = h5py.File(h5_path, 'r')
+        mesh_fname = h5_file['object/file'][()]
+
+        mesh_scale = h5_file['object/scale'][()]
+        # load and rescale, translate object mesh
+        object_model = Object(os.path.join(root_folder, mesh_root, mesh_fname))
+        # object_model.rescale(mesh_scale)
+        # object_model = object_model.mesh
+        # object_mean = np.mean(object_model.vertices, 0, keepdims=1)
+        # object_model.vertices -= object_mean
+        
+        object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
+        object_model.rescale(mesh_scale)
+        object_mean = object_model.mesh.centroid
+        object_model = object_model.mesh 
+        # load bimanual grasp
+        grasps = np.asarray(h5_file['grasps/transforms'])
+        grasps[:, :, :3, 3] -= object_mean
+        
+        # scale each grasp quality and sum them up
+        force_closure = np.array(h5_file["/grasps/qualities/Force_closure"])
+        torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
+        dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
+        
+        force_closure_weight = 0.4
+        torque_optimization_weight = 0.1
+        dexterity_weight = 0.5
+        
+        sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
+                        dexterity_weight * dexterity
+                        
+        return grasps, sum_quality, object_model, os.path.join(root_folder, mesh_root, mesh_fname), mesh_scale
+        

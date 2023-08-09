@@ -195,6 +195,12 @@ class BaseOptions:
             type=bool,
             default=False,
         )
+        self.parser.add_argument(
+            '--is_bimanual_v3',
+            type=bool,
+            default=False,
+        )
+        
     def parse(self):
         if not self.initialized:
             self.initialize()
@@ -242,8 +248,10 @@ class BaseOptions:
                 name += "_latent_size_" + str(self.opt.latent_size)
             if self.opt.is_bimanual:
                 name += "_bimanual"
-            if self.opt.is_bimanual_v2:
+            if self.opt.is_bimanual_v2 and not self.opt.is_bimanual_v3:
                 name += "_bimanual_v2"
+            if self.opt.is_bimanual_v3:
+                name += "_bimanual_v3"
             if self.opt.seed is not None:
                 name += "_seed_" + str(self.opt.seed)
             if self.opt.is_dgcnn:
