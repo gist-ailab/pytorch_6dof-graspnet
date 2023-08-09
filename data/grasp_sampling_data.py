@@ -123,16 +123,9 @@ class BimanualGraspSamplingData(BaseDataset):
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
         
         if not self.is_train:
-<<<<<<< HEAD
-            # files = files[200:210]
-            files = files[:50]
-        else:
-            files = files[:50]
-=======
             files = files[100:120]
         else:
             files = files[:100] # 3315
->>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
 
         return files
     
@@ -373,29 +366,63 @@ class BimanualGraspSamplingDataV2(BaseDataset):
             if torch.utils.data.get_worker_info() else 0)
         
         # get the grasp and quality for the sampled grasp idx
-        output_qualities = []
-        output_grasps1 = []
-        output_grasps2 = []
-        for iter in range(self.opt.num_grasps_per_object):
-            selected_grasp_index = sampled_grasp_idxs[iter]
+        # get the grasp and quality for the sampled grasp idx
+        pos_gt_control_points1 = []
+        pos_gt_control_points2 = []
+        pos_output_grasp1 = []
+        pos_output_grasp2 = []
+        pos_output_quality = []
+        
+        
+        
+        while len(pos_gt_control_points1) < self.opt.num_grasps_per_object:
+            output_qualities = []
+            output_grasps1 = []
+            output_grasps2 = []
+            target_num_grasps = self.opt.num_grasps_per_object - len(pos_gt_control_points1)
+            sampled_grasp_idxs = np.random.choice(pos_grasp_idxs, target_num_grasps)
+            for iter in range(target_num_grasps):
+                selected_grasp_index = sampled_grasp_idxs[iter]
 
-            selected_grasp = pos_grasps[selected_grasp_index]
-            selected_quality = pos_qualities[selected_grasp_index]
-            output_qualities.append(selected_quality)
+                selected_grasp = pos_grasps[selected_grasp_index]
+                selected_quality = pos_qualities[selected_grasp_index]
+                output_qualities.append(selected_quality)
 
-            output_grasps1.append(camera_pose.dot(selected_grasp[0])) #(64, 4, 4)
-            output_grasps2.append(camera_pose.dot(selected_grasp[1]))
+                output_grasps1.append(camera_pose.dot(selected_grasp[0])) #(64, 4, 4)
+                output_grasps2.append(camera_pose.dot(selected_grasp[1]))
+                
+            gt_control_points1 = utils.transform_control_points_numpy(
+                np.array(output_grasps1), target_num_grasps, mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2) #(64, 6, 4)
+            gt_control_points2 = utils.transform_control_points_numpy(
+                np.array(output_grasps2), target_num_grasps, mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2) #(64, 6, 4)
             
-        gt_control_points1 = utils.transform_control_points_numpy(
-<<<<<<< HEAD
-            np.array(output_grasps1), self.opt.num_grasps_per_object, mode='rt', is_bimanual=True) #(64, 6, 4)
-        gt_control_points2 = utils.transform_control_points_numpy(
-            np.array(output_grasps2), self.opt.num_grasps_per_object, mode='rt', is_bimanual=True) #(64, 6, 4)
-=======
-            np.array(output_grasps1), self.opt.num_grasps_per_object, mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2) #(64, 6, 4)
-        gt_control_points2 = utils.transform_control_points_numpy(
-            np.array(output_grasps2), self.opt.num_grasps_per_object, mode='rt', is_bimanual_v2=self.opt.is_bimanual_v2) #(64, 6, 4)
->>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
+            # check if the grasp point is near the object point cloud
+            # if not, sample another grasp point
+            for i in range(target_num_grasps):
+                target_cps1 = gt_control_points1[i][:, :3]
+                target_cps2 = gt_control_points2[i][:, :3]
+                middle_point1 = (target_cps1[4] + target_cps1[5]) / 2
+                middle_point2 = (target_cps2[4] + target_cps2[5]) / 2
+                
+                # check if the middle point1 is near the object point cloud by threashold distacne
+                dist1 = np.linalg.norm(pc[:, :3] - middle_point1, axis=1)
+                dist2 = np.linalg.norm(pc[:, :3] - middle_point2, axis=1)
+                if np.min(dist1) > 0.1 or np.min(dist2) > 0.1:
+                    print('dist1 or dist2 is too far')
+                    continue
+                else:
+                    pos_gt_control_points1.append(target_cps1)
+                    pos_gt_control_points2.append(target_cps2)
+                    pos_output_grasp1.append(output_grasps1[i])
+                    pos_output_grasp2.append(output_grasps2[i])
+                    pos_output_quality.append(output_qualities[i])
+
+                    
+        output_grasps1 = copy.deepcopy(np.asarray(pos_output_grasp1))
+        output_grasps2 = copy.deepcopy(np.asarray(pos_output_grasp2))
+        output_qualities = copy.deepcopy(np.asarray(pos_output_quality))
+        gt_control_points1 = copy.deepcopy(np.asarray(pos_gt_control_points1))
+        gt_control_points2 = copy.deepcopy(np.asarray(pos_gt_control_points2))
         
         meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
         meta['grasp_rt1'] = np.array(output_grasps1).reshape(
@@ -458,18 +485,6 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         mesh_scale = h5_file['object/scale'][()]
         # load and rescale, translate object mesh
         object_model = Object(os.path.join(root_folder, mesh_root, mesh_fname))
-<<<<<<< HEAD
-        ###########* change object model transformation
-        object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
-        object_model.rescale(mesh_scale)
-        object_mean = object_model.mesh.centroid
-        object_model = object_model.mesh
-        
-        # object_model.rescale(mesh_scale)
-        # object_model = object_model.mesh
-        # object_mean = np.mean(object_model.vertices, 0, keepdims=1)
-        # object_model.vertices -= object_mean
-=======
         # object_model.rescale(mesh_scale)
         # object_model = object_model.mesh
         # object_mean = np.mean(object_model.vertices, 0, keepdims=1)
@@ -479,7 +494,6 @@ class BimanualGraspSamplingDataV2(BaseDataset):
         object_model.rescale(mesh_scale)
         object_mean = object_model.mesh.centroid
         object_model = object_model.mesh 
->>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
         # load bimanual grasp
         
         grasps = np.asarray(h5_file['grasps/transforms'])

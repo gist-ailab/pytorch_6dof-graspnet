@@ -246,9 +246,6 @@ class BaseOptions:
                 name += "_bimanual_v2"
             if self.opt.seed is not None:
                 name += "_seed_" + str(self.opt.seed)
-<<<<<<< HEAD
-
-=======
             if self.opt.is_dgcnn:
                 name += "_dgcnn"
             if self.opt.npoints != 1024:
@@ -256,7 +253,6 @@ class BaseOptions:
             if self.opt.kl_loss_weight != 0.01:
                 name += "_kl_loss_weight_" + str(self.opt.kl_loss_weight)
                 
->>>>>>> 1747d90f04169f0fc8974f6faa5511eea8042df8
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)
             if os.path.isdir(expr_dir) and not self.opt.continue_train:
