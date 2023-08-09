@@ -242,7 +242,7 @@ class GraspNetModel:
                         return reconstruction_loss, 1
                 elif self.opt.arch == "gan":
                     predicted_cp = utils.transform_control_points(
-                        prediction, prediction.shape[0], device=self.device)
+                        prediction, prediction.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
                     reconstruction_loss, _ = self.criterion(
                         predicted_cp,
                         self.targets,
