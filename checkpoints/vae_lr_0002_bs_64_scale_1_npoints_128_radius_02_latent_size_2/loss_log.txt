@@ -1,2 +1,0 @@
-================ Training Loss (Tue Aug  8 00:18:55 2023) ================
-(epoch: 1, iters: 1600, time: 0.001, data: 0.656) total_loss: 0.683838 kl_loss: 0.034135 reconstruction_loss: 0.501653 confidence loss: 0.148050

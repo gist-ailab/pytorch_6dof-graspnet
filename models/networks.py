@@ -164,7 +164,6 @@ class GraspSampler(nn.Module):
     def concatenate_z_with_pc(self, pc, z):
         z.unsqueeze_(1)
         z = z.expand(-1, pc.shape[1], -1)
-
         return torch.cat((pc, z), -1)
 
     def get_latent_size(self):
@@ -255,8 +254,6 @@ class GraspSamplerVAE(GraspSampler):
         end = time()
         # print('encode time', end - start)
         mu, logvar = self.bottleneck(z)
-        if torch.isnan(mu).any() or torch.isnan(logvar).any():
-            print("mu or logvar is nan")
         z = self.reparameterize(mu, logvar)
         start = time()
         qt, confidence = self.decode(pc, z, self.is_bimanual_v2, self.is_dgcnn)
@@ -285,7 +282,7 @@ class GraspSamplerVAE(GraspSampler):
     def generate_grasps(self, pc, z=None):
         if z is None:
             z = self.sample_latent(pc.shape[0])
-        qt, confidence = self.decode(pc, z, self.is_bimanual_v2)
+        qt, confidence = self.decode(pc, z)
         return qt, confidence, z.squeeze()
 
     def generate_dense_latents(self, resolution):

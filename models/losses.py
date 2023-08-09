@@ -1,7 +1,7 @@
 import torch
 import numpy as np
-import torch.nn.functional as F
-import torch.nn as nn
+
+
 def control_point_l1_loss_better_than_threshold(pred_control_points,
                                                 gt_control_points,
                                                 confidence,
@@ -178,23 +178,6 @@ def kl_divergence(mu, log_sigma, device="cpu"):
     """
       Computes the kl divergence for batch of mu and log_sigma.
     """
-    # print('log_sigma', log_sigma)
-    # before = torch.mean(-.5 * torch.sum(1. + log_sigma - mu**2 - torch.exp(log_sigma), dim=-1))
-    # print(before)
-    # # normal_dist1 = torch.distributions.Normal(mu, torch.exp(log_sigma))
-    # # normal_dist2 = torch.distributions.Normal(torch.zeros_like(mu), torch.ones_like(log_sigma))
-    # # kl_div = F.kl_div(normal_dist1.log_prob(normal_dist1.sample()), normal_dist2.log_prob(normal_dist2.sample()), reduction='batchmean')
-    # variance = torch.exp(log_sigma)
-    # target_distribution = torch.distributions.Normal(torch.zeros_like(mu), torch.ones_like(variance))
-    # log_prob = target_distribution.log_prob(mu + torch.randn_like(variance) * torch.exp(0.5 * log_sigma))
- 
-    # kldiv_loss = nn.KLDivLoss(reduction='batchmean')(log_prob, torch.zeros_like(log_prob))
-    # # kldiv_loss *= -0.5
-    # print(kldiv_loss)
-    # exit()
-    # after = kl_div
-    # print(after)
-    # exit()
     return torch.mean(
         -.5 * torch.sum(1. + log_sigma - mu**2 - torch.exp(log_sigma), dim=-1))
 

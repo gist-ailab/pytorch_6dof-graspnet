@@ -12,8 +12,6 @@ import mayavi.mlab as mlab
 from utils import utils
 from data import DataLoader
 
-import warnings
-warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
 
 def make_parser():
     parser = argparse.ArgumentParser(
@@ -65,7 +63,6 @@ def make_parser():
         "Set the batch size of the number of grasps we want to process and can fit into the GPU memory at each forward pass. The batch_size can be increased for a GPU with more memory."
     )
     parser.add_argument('--train_data', action='store_true')
-    # parser.add_argument('--is_bimanual_v2', type=bool, default=False)
     opts, _ = parser.parse_known_args()
     if opts.train_data:
         parser.add_argument('--dataset_root_folder',
@@ -139,14 +136,10 @@ def main(args):
         grasp_sampler_args.dataset_root_folder = args.dataset_root_folder
         grasp_sampler_args.num_grasps_per_object = 1
         grasp_sampler_args.num_objects_per_batch = 1
-        grasp_sampler_args.is_bimanual = False
-        grasp_sampler_args.is_bimanual_v2 = False
         dataset = DataLoader(grasp_sampler_args)
         for i, data in enumerate(dataset):
-
             generated_grasps, generated_scores = estimator.generate_and_refine_grasps(
                 data["pc"].squeeze())
-
             mlab.figure(bgcolor=(1, 1, 1))
             draw_scene(data["pc"][0],
                        grasps=generated_grasps,
