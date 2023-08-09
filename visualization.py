@@ -72,32 +72,33 @@ def main(epoch=-1, name="", is_train=True):
     opt.name = name
     print(is_train)
     dataset = DataLoader(opt, is_train)
-    model = create_model(opt)
+    # model = create_model(opt)
     
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     for i, data in enumerate(dataset):
         pc_np = data['pc']
         
         #* vis gt grasp is valid
-        # furthest_distance = np.max(np.sqrt(np.sum(abs(pc_np)**2,axis=-1)))
-        # print(furthest_distance)
+        furthest_distance = np.max(np.sqrt(np.sum(abs(pc_np)**2,axis=-1)))
+        print(furthest_distance)
         
-        # for i in range(pc_np.shape[0]):
-        #     pcd_object = o3d.geometry.PointCloud()
-        #     pcd_object.points = o3d.utility.Vector3dVector(pc_np[i])
-        #     pcd_object.paint_uniform_color([0.0, 0.0, 1.0])
+        for i in range(pc_np.shape[0]):
+            pcd_object = o3d.geometry.PointCloud()
+            pcd_object.points = o3d.utility.Vector3dVector(pc_np[i])
+            pcd_object.paint_uniform_color([0.0, 0.0, 1.0])
             
-        #     gt_grasp_point1 = data['target_cps1']
-        #     gt_grasp_point2 = data['target_cps2']
+            gt_grasp_point1 = data['target_cps1']
+            gt_grasp_point2 = data['target_cps2']
             
-        #     pcd_grasp1 = o3d.geometry.PointCloud()
-        #     pcd_grasp2 = o3d.geometry.PointCloud()
-        #     pcd_grasp1.points = o3d.utility.Vector3dVector(gt_grasp_point1[i])
-        #     pcd_grasp2.points = o3d.utility.Vector3dVector(gt_grasp_point2[i])
-        #     pcd_grasp1.paint_uniform_color([1.0, 0.0, 0.0])
-        #     pcd_grasp2.paint_uniform_color([1.0, 0.0, 0.0])
+            pcd_grasp1 = o3d.geometry.PointCloud()
+            pcd_grasp2 = o3d.geometry.PointCloud()
+            pcd_grasp1.points = o3d.utility.Vector3dVector(gt_grasp_point1[i])
+            pcd_grasp2.points = o3d.utility.Vector3dVector(gt_grasp_point2[i])
+            pcd_grasp1.paint_uniform_color([1.0, 0.0, 0.0])
+            pcd_grasp2.paint_uniform_color([1.0, 0.0, 0.0])
             
-        #     o3d.visualization.draw_geometries([pcd_object, pcd_grasp1, pcd_grasp2])
+            o3d.visualization.draw_geometries([pcd_object, pcd_grasp1, pcd_grasp2])
+        exit()
         
         pc_mean = np.mean(pc_np[0], 0)
         pc_np -= np.expand_dims(pc_mean, 0)

@@ -600,7 +600,7 @@ class BimanualGraspSamplingDataV3(BaseDataset):
     
     def __getitem__(self, index):
         path = self.paths[index]
-        pos_grasps, pos_qualities, _, cad_path, cad_scale = self.read_grasp_file(path)
+        pos_grasps, pos_qualities, object_model, cad_path, cad_scale = self.read_grasp_file(path)
         meta = {}
         
         #sample grasp idx for data loading
@@ -608,20 +608,21 @@ class BimanualGraspSamplingDataV3(BaseDataset):
         
         #* sample whole point cloud from mesh model
         # load trimesh object
-        object_mesh = trimesh.load(cad_path)
-        if isinstance(object_mesh, list):
-            object_mesh = trimesh.util.concatenate(object_mesh)
-        # scale and center the object
-        object_mesh.apply_scale(cad_scale)
-        object_mesh_mean = np.mean(object_mesh.vertices, axis=0)
-        object_mesh.vertices -= object_mesh_mean
+        # object_mesh = trimesh.load(cad_path)
+        # if isinstance(object_mesh, list):
+        #     object_mesh = trimesh.util.concatenate(object_mesh)
+        # # scale and center the object
+        # object_mesh.apply_scale(cad_scale)
+        # object_mesh_mean = np.mean(object_mesh.vertices, axis=0)
+        # object_mesh.vertices -= object_mesh_mean
+
         # sample points from the object
-        pc = object_mesh.sample(self.opt.npoints)
+        pc = object_model.sample(self.opt.npoints)
         output_grasps1 = pos_grasps[:, 0, :, :]
         output_grasps2 = pos_grasps[:, 1, :, :]
         # output_grasps1 = output_grasps1[:, 3, :3]
-        output_grasps1[:, :3, 3] = output_grasps1[:, :3, 3] - object_mesh_mean
-        output_grasps2[:, :3, 3] = output_grasps2[:, :3, 3] - object_mesh_mean
+        # output_grasps1[:, :3, 3] = output_grasps1[:, :3, 3] - object_mesh_mean
+        # output_grasps2[:, :3, 3] = output_grasps2[:, :3, 3] - object_mesh_mean
         
         gt_control_points1 = utils.transform_control_points_numpy(
             np.array(output_grasps1), len(output_grasps1), mode='rt', is_bimanual_v2=True)

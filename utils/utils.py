@@ -294,7 +294,7 @@ def get_control_point_tensor(batch_size, use_torch=True, device="cpu", is_bimanu
     """
     
     
-    if is_bimanual:
+    if is_bimanual or is_bimanual_v2:
         # control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, -7.27595772e-12, 0],
         #                   [-0.0425, -7.27595772e-12, 0], [0.0425, -7.27595772e-12, 0.0675],
         #                   [-0.0425, -7.27595772e-12, 0.0675]]
@@ -426,7 +426,7 @@ def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual
             control_points_trans[:, :, 2] = -control_points[:, :, 1]
             control_points_trans[:, :, 1] = control_points[:, :, 2]
             control_points = control_points_trans
-        
+
             
         
         return np.matmul(control_points, np.transpose(gt_grasps, (0, 2, 1)))
