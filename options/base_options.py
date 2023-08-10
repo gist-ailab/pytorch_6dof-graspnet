@@ -200,6 +200,12 @@ class BaseOptions:
             type=bool,
             default=False,
         )
+        self.parser.add_argument(
+            '--use_point_loss',
+            type=bool,
+            default=False,
+        )
+        
     def parse(self):
         if not self.initialized:
             self.initialize()
@@ -259,6 +265,8 @@ class BaseOptions:
                 name += "_npoints_" + str(self.opt.npoints)
             if self.opt.kl_loss_weight != 0.01:
                 name += "_kl_loss_weight_" + str(self.opt.kl_loss_weight)
+            if self.opt.use_point_loss:
+                name+= "_use_point_loss"
                 
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)

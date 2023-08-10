@@ -346,9 +346,9 @@ class BimanualGraspSamplingDataV2(BaseDataset):
             files_proccessed.append(file)  
             
         if not self.is_train:
-            files_proccessed = files_proccessed[1000:1200]
+            files_proccessed = files_proccessed[10:12]
         else:
-            files_proccessed = files_proccessed[:1000]
+            files_proccessed = files_proccessed[:10]
 
         return files_proccessed
     
@@ -793,4 +793,3 @@ class BimanualGraspSamplingDataV3(BaseDataset):
                         dexterity_weight * dexterity
                         
         return grasps, sum_quality, object_model, os.path.join(root_folder, mesh_root, mesh_fname), mesh_scale
-        

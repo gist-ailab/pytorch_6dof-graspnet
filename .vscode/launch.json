@@ -10,7 +10,29 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal",
+<<<<<<< HEAD
             "justMyCode": true
+=======
+            "justMyCode": true,
+            "args" : [
+                "--arch", "vae",
+                "--dataset_root_folder", "da2_dataset",
+                "--is_bimanual_v2","True",
+                "--gpu_ids", "3,4",
+                "--print_freq", "100",
+                "--lr", "0.0002",
+                "--latent_size", "5",
+                "--kl_loss_weight", "0.003",
+                "--num_grasps_per_object", "192",
+                "--niter", "1000",
+                "--niter_decay", "10000",
+                "--run_test_freq", "10",
+                "--save_epoch_freq", "10",
+                "--num_objects_per_batch", "2",
+                "--num_thread", "1",
+                "--continue_train",
+            ]
+>>>>>>> 6df6efb881a1abc8ff647e527ff5b20c19eac7d4
         }
     ]
 }
