@@ -111,8 +111,6 @@ def main(epoch=-1, name="", is_train=True):
         if opt.is_bimanual==False and opt.is_bimanual_v2==True:
             if opt.is_bimanual_v3:
                 grasps_R1 = torch.stack([dir1, torch.cross(app1, dir1), app1], dim=2)
-                print(dir1, dir2)
-                exit()
                 grasps_t1 = point1 - 0.00675*app1
                 homog_vec =  torch.tensor([0,0,0,1], dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0).repeat(grasps_R1.shape[0], 1, 1)
                 grasp1 = torch.cat((torch.cat((grasps_R1, grasps_t1.unsqueeze(2)), dim=2), homog_vec), dim=1)
@@ -122,8 +120,7 @@ def main(epoch=-1, name="", is_train=True):
                 grasps2_t2 = point2 - 0.00675*app2
                 grasp2 = torch.cat((torch.cat((grasps2_R2, grasps2_t2.unsqueeze(2)), dim=2), homog_vec), dim=1)
                 grasp2 = grasp2.detach().cpu().numpy()
-                print(grasp2[0])
-                exit()
+
                 
             else:
                 grasps1 = grasps[:, 0, :]
