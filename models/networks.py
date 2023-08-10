@@ -284,7 +284,7 @@ class GraspSamplerVAE(GraspSampler):
     def generate_grasps(self, pc, z=None):
         if z is None:
             z = self.sample_latent(pc.shape[0])
-        qt, confidence = self.decode(pc, z)
+        qt, confidence = self.decode(pc, z, self.is_bimanual_v2)
         return qt, confidence, z.squeeze()
 
     def generate_dense_latents(self, resolution):
