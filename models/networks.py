@@ -485,13 +485,13 @@ def base_network(pointnet_radius, pointnet_nclusters, scale, in_features, is_dgc
         return nn.ModuleList([base_dgcnn, fc_layer])
     else:
         sa1_module = pointnet2.PointnetSAModule(
-            npoint=pointnet_nclusters,
-            radius=pointnet_radius,
+            npoint=pointnet_nclusters[0],
+            radius=pointnet_radius[0],
             nsample=64,
             mlp=[in_features, 64 * scale, 64 * scale, 128 * scale])
         sa2_module = pointnet2.PointnetSAModule(
-            npoint=32,
-            radius=0.04,
+            npoint=pointnet_nclusters[1], #32
+            radius=pointnet_radius[1], #0.04
             nsample=128,
             mlp=[128 * scale, 128 * scale, 128 * scale, 256 * scale])
 
