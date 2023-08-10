@@ -214,7 +214,6 @@ class GraspSampler(nn.Module):
                     xyz, xyz_features = module(xyz, xyz_features)
 
                 x = self.decoder[1](xyz_features.squeeze(-1))
- 
                 predicted_qt1 = torch.cat((F.normalize(self.q1(x), p=2, dim=-1), self.t1(x)), -1)
                 predicted_qt2 = torch.cat((F.normalize(self.q2(x), p=2, dim=-1), self.t2(x)), -1)
                 predicted_qt = torch.cat((predicted_qt1.unsqueeze(0), predicted_qt2.unsqueeze(0)), dim=0)
@@ -358,8 +357,12 @@ class GraspSamplerVAE(GraspSampler):
     def generate_grasps(self, pc, z=None):
         if z is None:
             z = self.sample_latent(pc.shape[0])
-        qt, confidence = self.decode(pc, z, self.is_bimanual_v2)
-        return qt, confidence, z.squeeze()
+        if self.is_bimanual_v3:
+            dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=True)
+            return dir1, dir2, app1, app2, point1, point2, confidence, z.squeeze()
+        else:
+            qt, confidence = self.decode(pc, z, self.is_bimanual_v2)
+            return qt, confidence, z.squeeze()
 
     def generate_dense_latents(self, resolution):
         """

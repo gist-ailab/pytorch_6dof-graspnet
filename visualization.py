@@ -103,15 +103,36 @@ def main(epoch=-1, name="", is_train=True):
         pc_np -= np.expand_dims(pc_mean, 0)
         
         pc = torch.from_numpy(data['pc']).to(device)
-        grasps, condfidence, z = model.generate_grasps(pc)
-        if opt.is_bimanual==False and opt.is_bimanual_v2==True:
-            grasps1 = grasps[:, 0, :]
-            grasps2 = grasps[:, 1, :]
-            grasps_eulers1, grasp_translation1 = utils.convert_qt_to_rt(grasps1, is_bimanual=True)
-            grasps_eulers2, grasp_translation2 = utils.convert_qt_to_rt(grasps2, is_bimanual=True)
+        if opt.is_bimanual_v3:
+            dir1, dir2, app1, app2, point1, point2, condfidence, z = model.generate_grasps(pc)
+        else:
+            grasps, condfidence, z = model.generate_grasps(pc)
             
-            grasp1 = rot_ang_trans_to_grasps_wo_refine(grasps_eulers1, grasp_translation1)
-            grasp2 = rot_ang_trans_to_grasps_wo_refine(grasps_eulers2, grasp_translation2)
+        if opt.is_bimanual==False and opt.is_bimanual_v2==True:
+            if opt.is_bimanual_v3:
+                grasps_R1 = torch.stack([dir1, torch.cross(app1, dir1), app1], dim=2)
+                print(dir1, dir2)
+                exit()
+                grasps_t1 = point1 - 0.00675*app1
+                homog_vec =  torch.tensor([0,0,0,1], dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0).repeat(grasps_R1.shape[0], 1, 1)
+                grasp1 = torch.cat((torch.cat((grasps_R1, grasps_t1.unsqueeze(2)), dim=2), homog_vec), dim=1)
+                grasp1 = grasp1.detach().cpu().numpy()
+                
+                grasps2_R2 = torch.stack([dir2, torch.cross(app2, dir2), app2], dim=2)
+                grasps2_t2 = point2 - 0.00675*app2
+                grasp2 = torch.cat((torch.cat((grasps2_R2, grasps2_t2.unsqueeze(2)), dim=2), homog_vec), dim=1)
+                grasp2 = grasp2.detach().cpu().numpy()
+                print(grasp2[0])
+                exit()
+                
+            else:
+                grasps1 = grasps[:, 0, :]
+                grasps2 = grasps[:, 1, :]
+                grasps_eulers1, grasp_translation1 = utils.convert_qt_to_rt(grasps1, is_bimanual=True)
+                grasps_eulers2, grasp_translation2 = utils.convert_qt_to_rt(grasps2, is_bimanual=True)
+                
+                grasp1 = rot_ang_trans_to_grasps_wo_refine(grasps_eulers1, grasp_translation1)
+                grasp2 = rot_ang_trans_to_grasps_wo_refine(grasps_eulers2, grasp_translation2)
             
             gt_grasps1 = data['grasp_rt1']
             gt_grasps2 = data['grasp_rt2']
@@ -368,4 +389,5 @@ def denormalize_grasps(grasps, mean=0, std=1):
 
 if __name__ == '__main__':
     main(name='/SSD3/Workspace/pytorch_6dof-graspnet/checkpoints/bengio/vae_lr_0002_bs_192_scale_1_npoints_128_radius_02_latent_size_5_bimanual_v2_bimanual_v3_kl_loss_weight_0.001')
+    # main(name='/SSD3/Workspace/pytorch_6dof-graspnet/checkpoints/vae_lr_0002_bs_384_scale_1_npoints_128_radius_02_latent_size_5_bimanual_v2_bengio/vae_lr_0002_bs_384_scale_1_npoints_128_radius_02_latent_size_5_bimanual_v2_kl_loss_weight_0.001')
     # main(name='vae_pretrained')
