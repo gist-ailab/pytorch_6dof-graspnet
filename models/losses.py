@@ -43,7 +43,9 @@ def control_point_l1_loss(pred_control_points,
                           confidence=None,
                           confidence_weight=None,
                           device="cpu",
-                          is_bimanual_v2=False):
+                          is_bimanual_v2=False,
+                          point_loss=False,
+                          pred_middle_point=None):
     """
       Computes the l1 loss between the predicted control points and the
       groundtruth control points on the gripper.
@@ -54,10 +56,26 @@ def control_point_l1_loss(pred_control_points,
         error = torch.sum(torch.abs(pred_control_points - gt_control_points), -1)
 
     else:
-        # print(pred_control_points.shape)
-        error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1)
-        error2 = torch.sum(torch.abs(pred_control_points[1] - gt_control_points[1]), -1)
-        error = error1 + error2
+        if point_loss:
+            assert pred_middle_point is not None
+            error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1)
+            error2 = torch.sum(torch.abs(pred_control_points[1] - gt_control_points[1]), -1)
+            
+            gt_middle_point1 = (gt_control_points[0,:,4] + gt_control_points[0,:,5]) / 2
+            gt_middle_point2 = (gt_control_points[1,:,4] + gt_control_points[1,:,5]) / 2
+            error_point1 = torch.sum(torch.abs(pred_middle_point[0] - gt_middle_point1), -1)
+            error_point2 = torch.sum(torch.abs(pred_middle_point[1] - gt_middle_point2), -1)
+
+            error1 = torch.cat((error1, error_point1.unsqueeze(-1)), -1)
+            error2 = torch.cat((error2, error_point2.unsqueeze(-1)), -1)
+            
+            error = error1 + error2
+        else:
+
+            error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1)
+            error2 = torch.sum(torch.abs(pred_control_points[1] - gt_control_points[1]), -1)
+            
+            error = error1 + error2
     
     error = torch.mean(error, -1)
     if confidence is not None:

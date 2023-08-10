@@ -104,14 +104,24 @@ class GraspNetModel:
                     confidence_weight=self.opt.confidence_weight,
                     device=self.device)  
             else:
-                predicted_cp, confidence, mu, logvar = out
-                if len(self.opt.gpu_ids) > 1:
-                    predicted_cp = torch.transpose(predicted_cp, 0, 1)
-                    
-                predicted_cp1 = utils.transform_control_points(
-                    predicted_cp[0], predicted_cp[0].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
-                predicted_cp2 = utils.transform_control_points(
-                    predicted_cp[1], predicted_cp[1].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
+                if self.opt.is_bimanual_v3:
+                    dir1, dir2, app1, app2, point1, point2, confidence, mu, logvar = out
+
+                    predicted_cp1 = utils.transform_control_points_v3(app1, dir1, point1, app1.shape[0], device=self.device)[:,:,:3]
+                    predicted_cp2 = utils.transform_control_points_v3(app2, dir2, point2, app2.shape[0], device=self.device)[:,:,:3]
+                    predicted_point = torch.cat([point1.unsqueeze(0), point2.unsqueeze(0)], dim=0)
+                    predicted_point = predicted_point.to(device=self.device)
+                else:
+                    predicted_cp, confidence, mu, logvar = out
+                    if len(self.opt.gpu_ids) > 1:
+                        predicted_cp = torch.transpose(predicted_cp, 0, 1)
+                        
+                    predicted_cp1 = utils.transform_control_points(
+                        predicted_cp[0], predicted_cp[0].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
+                    predicted_cp2 = utils.transform_control_points(
+                        predicted_cp[1], predicted_cp[1].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
+                    predicted_point = None
+                
                 predicted_cp = torch.cat([predicted_cp1.unsqueeze(0), predicted_cp2.unsqueeze(0)], dim=0)# (2, 64, 6, 3)
                 predicted_cp = predicted_cp.to(device=self.device)
                 self.reconstruction_loss, self.confidence_loss = self.criterion[1](
@@ -120,7 +130,9 @@ class GraspNetModel:
                     confidence=confidence,
                     confidence_weight=self.opt.confidence_weight,
                     device=self.device,
-                    is_bimanual_v2=self.opt.is_bimanual_v2)
+                    is_bimanual_v2=self.opt.is_bimanual_v2,
+                    point_loss=self.opt.use_point_loss,
+                    pred_middle_point=predicted_point)
                  
             self.kl_loss = self.opt.kl_loss_weight * self.criterion[0](
                     mu, logvar, device=self.device)
@@ -204,7 +216,10 @@ class GraspNetModel:
         """
         with torch.no_grad():
             out = self.forward()
-            prediction, confidence = out
+            if self.opt.is_bimanual_v3:
+                dir1, dir2, app1, app2, point1, point2, confidence = out
+            else:
+                prediction, confidence = out
             if vis:
                 if self.opt.arch == 'vae':
                     predicted_cp = utils.transform_control_points(
@@ -224,21 +239,35 @@ class GraspNetModel:
                             device=self.device)
                         return reconstruction_loss, 1
                     else:
-                        if len(self.opt.gpu_ids) > 1:
-                            prediction = torch.transpose(prediction, 0, 1)
+                        if self.opt.is_bimanual_v3:
+                    
+                            predicted_cp1 = utils.transform_control_points_v3(app1, dir1, point1, app1.shape[0], device=self.device)[:,:,:3]
+                            predicted_cp2 = utils.transform_control_points_v3(app2, dir2, point2, app2.shape[0], device=self.device)[:,:,:3]
+                            predicted_point = torch.cat([point1.unsqueeze(0), point2.unsqueeze(0)], dim=0)
+                            predicted_point = predicted_point.to(device=self.device)
+                        else:
+                            if len(self.opt.gpu_ids) > 1:
+                                prediction = torch.transpose(prediction, 0, 1)
+                            
+                            predicted_cp1 = utils.transform_control_points(
+                            prediction[0], prediction[0].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
+                            predicted_cp2 = utils.transform_control_points(
+                                prediction[1], prediction[1].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
+                            predicted_point = None
                         
-                        predicted_cp1 = utils.transform_control_points(
-                        prediction[0], prediction[0].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
-                        predicted_cp2 = utils.transform_control_points(
-                            prediction[1], prediction[1].shape[0], device=self.device, is_bimanual=True)[:,:,:3]
                         predicted_cp = torch.cat([predicted_cp1.unsqueeze(0), predicted_cp2.unsqueeze(0)], dim=0)# (2, 64, 6, 3)
+                        predicted_cp = predicted_cp.to(device=self.device)
+                        
                         reconstruction_loss, _ = self.criterion[1](
                             predicted_cp,
                             self.targets,
                             confidence=confidence,
                             confidence_weight=self.opt.confidence_weight,
                             device=self.device,
-                            is_bimanual_v2=self.opt.is_bimanual_v2)
+                            is_bimanual_v2=self.opt.is_bimanual_v2,
+                            point_loss=self.opt.use_point_loss,
+                            pred_middle_point=predicted_point)
+                        
                         return reconstruction_loss, 1
                 elif self.opt.arch == "gan":
                     predicted_cp = utils.transform_control_points(

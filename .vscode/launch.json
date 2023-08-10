@@ -1,0 +1,34 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: Current File",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args" : [
+                "--arch", "vae",
+                "--dataset_root_folder", "da2_dataset",
+                "--is_bimanual_v2","True",
+                "--gpu_ids", "3,4",
+                "--print_freq", "100",
+                "--lr", "0.0002",
+                "--latent_size", "5",
+                "--kl_loss_weight", "0.003",
+                "--num_grasps_per_object", "192",
+                "--niter", "1000",
+                "--niter_decay", "10000",
+                "--run_test_freq", "10",
+                "--save_epoch_freq", "10",
+                "--num_objects_per_batch", "2",
+                "--num_thread", "1",
+                "--continue_train",
+            ]
+        }
+    ]
+}
