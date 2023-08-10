@@ -198,10 +198,10 @@ class GraspSampler(nn.Module):
                 for module in self.decoder[0]:
                     xyz, xyz_features = module(xyz, xyz_features)
 
-                predicted_dir1 = F.normalize(self.dir1_layer(xyz_features),p=2,dim=-1).squeeze(-1)
-                predicted_dir2 = F.normalize(self.dir2_layer(xyz_features),p=2,dim=-1).squeeze(-1)
-                predicted_app1 = F.normalize(self.app1_layer(xyz_features),p=2,dim=-1).squeeze(-1)
-                predicted_app2 = F.normalize(self.app2_layer(xyz_features),p=2,dim=-1).squeeze(-1)
+                predicted_dir1 = F.normalize(self.dir1_layer(xyz_features),p=2,dim=1).squeeze(-1)
+                predicted_dir2 = F.normalize(self.dir2_layer(xyz_features),p=2,dim=1).squeeze(-1)
+                predicted_app1 = F.normalize(self.app1_layer(xyz_features),p=2,dim=1).squeeze(-1)
+                predicted_app2 = F.normalize(self.app2_layer(xyz_features),p=2,dim=1).squeeze(-1)
                 predicted_point1 = self.point1_layer(xyz_features).squeeze(-1)
                 predicted_point2 = self.point2_layer(xyz_features).squeeze(-1)
 
