@@ -6,3 +6,5 @@
 /*.tar.gz
 /checkpoints
 checkpoints/*
+/__pycache__
+/*pyc
