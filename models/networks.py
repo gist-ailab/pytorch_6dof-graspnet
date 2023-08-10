@@ -255,6 +255,8 @@ class GraspSamplerVAE(GraspSampler):
         # print('encode time', end - start)
         mu, logvar = self.bottleneck(z)
         z = self.reparameterize(mu, logvar)
+        print(z.shape)
+        exit()
         start = time()
         qt, confidence = self.decode(pc, z, self.is_bimanual_v2, self.is_dgcnn)
         end = time()
