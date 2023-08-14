@@ -73,7 +73,8 @@ def define_classifier(opt, gpu_ids, arch, init_type, init_gain, device):
     net = None
     if arch == 'vae':
         net = GraspSamplerVAE(opt.model_scale, opt.pointnet_radius,
-                              opt.pointnet_nclusters, opt.latent_size, device, opt.is_bimanual_v2, opt.is_dgcnn, opt.is_bimanual_v3)
+                              opt.pointnet_nclusters, opt.latent_size, device, 
+                              opt.is_bimanual_v2, opt.is_dgcnn, opt.is_bimanual_v3)
     elif arch == 'gan':
         net = GraspSamplerGAN(opt.model_scale, opt.pointnet_radius,
                               opt.pointnet_nclusters, opt.latent_size, device, opt.is_bimanual_v2, opt.is_bimanual_v3)
