@@ -76,7 +76,7 @@ def define_classifier(opt, gpu_ids, arch, init_type, init_gain, device):
                               opt.pointnet_nclusters, opt.latent_size, device, opt.is_bimanual_v2, opt.is_dgcnn, opt.is_bimanual_v3)
     elif arch == 'gan':
         net = GraspSamplerGAN(opt.model_scale, opt.pointnet_radius,
-                              opt.pointnet_nclusters, opt.latent_size, device)
+                              opt.pointnet_nclusters, opt.latent_size, device, opt.is_bimanual_v2, opt.is_bimanual_v3)
     elif arch == 'evaluator':
         net = GraspEvaluator(opt.model_scale, opt.pointnet_radius,
                              opt.pointnet_nclusters, device)
@@ -388,17 +388,28 @@ class GraspSamplerGAN(GraspSampler):
                  pointnet_radius,
                  pointnet_nclusters,
                  latent_size=2,
-                 device="cpu"):
+                 device="cpu",
+                 is_bimanual_v2=False,
+                 is_bimanual_v3=False):
         super(GraspSamplerGAN, self).__init__(latent_size, device)
+        self.is_bimanual_v2 = is_bimanual_v2
+        self.is_bimanual_v3 = is_bimanual_v3
+
         self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
                             latent_size + 3)
+        if self.is_bimanual_v2 and not self.is_bimanual_v3:
+            self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
+                                latent_size + 3, self.is_bimanual_v2)
+        elif self.is_bimanual_v3:
+            self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
+                                latent_size+3, self.is_bimanual_v2, is_bimanual_v3=True)
 
     def sample_latent(self, batch_size, device=None):
         return torch.rand(batch_size, self.latent_size).to(device)
 
     def forward(self, pc, grasps=None, train=True):
         z = self.sample_latent(pc.shape[0], device=pc.device)
-        return self.decode(pc, z)
+        return self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=self.is_bimanual_v3)
 
     def generate_grasps(self, pc, z=None):
         if z is None:
