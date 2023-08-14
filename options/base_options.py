@@ -135,15 +135,17 @@ class BaseOptions:
         )
         self.parser.add_argument(
             '--pointnet_radius',
-            help='Radius for ball query for PointNet++, just the first layer',
+            help='Radius for ball query for PointNet++, just the first layer', #0.02, 0.04
             type=float,
-            default=0.02)
+            # default=0.02,
+            nargs='+')
         self.parser.add_argument(
             '--pointnet_nclusters',
             help=
-            'Number of cluster centroids for PointNet++, just the first layer',
+            'Number of cluster centroids for PointNet++, just the first layer', #128, 32
             type=int,
-            default=128)
+            # default=128,
+            nargs='+')
         self.parser.add_argument(
             '--init_type',
             type=str,
@@ -200,6 +202,12 @@ class BaseOptions:
             type=bool,
             default=False,
         )
+        self.parser.add_argument(
+            '--use_point_loss',
+            type=bool,
+            default=False,
+        )
+        
     def parse(self):
         if not self.initialized:
             self.initialize()
@@ -259,6 +267,8 @@ class BaseOptions:
                 name += "_npoints_" + str(self.opt.npoints)
             if self.opt.kl_loss_weight != 0.01:
                 name += "_kl_loss_weight_" + str(self.opt.kl_loss_weight)
+            if self.opt.use_point_loss:
+                name+= "_use_point_loss"
                 
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)

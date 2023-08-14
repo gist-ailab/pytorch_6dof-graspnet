@@ -3,26 +3,16 @@ arch: vae
 balanced_data: false
 batch_size: 64
 beta1: 0.9
-<<<<<<< HEAD
 blacklisted_categories: ''
-=======
-blacklisted_categories: mug
->>>>>>> parent of 8e7d966... Feat: add bimanual grasp v2 + whole point cloud which name is bimanual grasp v3
 checkpoints_dir: ./checkpoints
 confidence_weight: 1.0
-continue_train: false
-dataset_root_folder: unified_grasp_data
+continue_train: true
+dataset_root_folder: /home/jens/Documents/datasets/grasping/unified_grasp_data/
 dataset_split: train
 depth_noise: 0.0
 epoch_count: 1
 gpu_ids:
-<<<<<<< HEAD
-- 7
-=======
-- 4
-- 5
-- 6
->>>>>>> parent of 8e7d966... Feat: add bimanual grasp v2 + whole point cloud which name is bimanual grasp v3
+- 0
 grasps_folder_name: grasps
 grasps_ratio: 1.0
 gripper: panda
@@ -31,6 +21,7 @@ init_gain: 0.02
 init_type: normal
 is_bimanual: false
 is_bimanual_v2: false
+is_bimanual_v3: false
 is_dgcnn: false
 is_train: true
 kl_loss_weight: 0.01
@@ -42,36 +33,22 @@ max_dataset_size: .inf
 merge_pcs_in_vae_encoder: 0
 model_scale: 1
 name: vae_lr_0002_bs_64_scale_1_npoints_128_radius_02_latent_size_2
-<<<<<<< HEAD
 niter: 100
 niter_decay: 2000
-=======
-niter: 1000
-niter_decay: 10000
->>>>>>> parent of 8e7d966... Feat: add bimanual grasp v2 + whole point cloud which name is bimanual grasp v3
 no_vis: false
 npoints: 1024
 num_grasp_clusters: 32
 num_grasps_per_object: 64
 num_objects_per_batch: 1
-<<<<<<< HEAD
-num_threads: 1
-=======
-num_threads: 32
->>>>>>> parent of 8e7d966... Feat: add bimanual grasp v2 + whole point cloud which name is bimanual grasp v3
+num_threads: 3
 occlusion_dropout_rate: 0
 occlusion_nclusters: 0
 phase: train
 pointnet_nclusters: 128
 pointnet_radius: 0.02
 print_freq: 100
-<<<<<<< HEAD
 run_test_freq: 1
 save_epoch_freq: 1
-=======
-run_test_freq: 10
-save_epoch_freq: 50
->>>>>>> parent of 8e7d966... Feat: add bimanual grasp v2 + whole point cloud which name is bimanual grasp v3
 save_latest_freq: 250
 seed: null
 serial_batches: false
