@@ -794,7 +794,7 @@ class BimanualGraspSamplingDataV3(BaseDataset):
                         
         return grasps, sum_quality, object_model, os.path.join(root_folder, mesh_root, mesh_fname), mesh_scale
     
-class BimanualGraspSamplingAnchorData(BaseDataset):
+class BimanualBlockGraspSamplingData(BaseDataset):
     def __init__(self, opt, is_train=True):
         BaseDataset.__init__(self, opt)
         self.opt = opt

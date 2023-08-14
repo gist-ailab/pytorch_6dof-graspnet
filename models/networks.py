@@ -72,6 +72,9 @@ def init_net(net, init_type, init_gain, gpu_ids):
 def define_classifier(opt, gpu_ids, arch, init_type, init_gain, device):
     net = None
     if arch == 'vae':
+        if opt.use_block:
+            net = GraspSamplerVAEBlock(opt.model_scale, opt.pointnet_radius,
+                                        opt.pointnet_nclusters, opt.latent_size, device)
         net = GraspSamplerVAE(opt.model_scale, opt.pointnet_radius,
                               opt.pointnet_nclusters, opt.latent_size, device, 
                               opt.is_bimanual_v2, opt.is_dgcnn, opt.is_bimanual_v3)
@@ -486,8 +489,151 @@ class GraspEvaluator(nn.Module):
                               -1).transpose(-1, 1)
         return l0_xyz, l0_points
 
+class GraspSamplerVAEBlock(GraspSampler):
+    """Network for learning a generative VAE grasp-sampler
+    """
+    def __init__(self,
+                 model_scale,
+                 pointnet_radius=0.02,
+                 pointnet_nclusters=128,
+                 latent_size=2,
+                 device="cpu",
+                 is_bimanual_v2=False,
+                 is_bimanual_v3=False):
+        super(GraspSamplerVAEBlock, self).__init__(latent_size, device)
+        self.device = device
 
-def base_network(pointnet_radius, pointnet_nclusters, scale, in_features, is_dgcnn=False, device='cuda'):
+        self.is_bimanual_v2 = is_bimanual_v2
+        self.is_bimanual_v3 = is_bimanual_v3
+        self.create_encoder(model_scale, pointnet_radius, pointnet_nclusters)
+
+        
+        if self.is_bimanual_v2 and not self.is_bimanual_v3:
+            self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
+                                latent_size + 3, self.is_bimanual_v2)
+        elif self.is_bimanual_v3:
+            self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
+                                latent_size+3, self.is_bimanual_v2, is_bimanual_v3=True)
+        
+        self.create_bottleneck(model_scale * 1024, latent_size)
+                
+    def create_encoder(
+            self,
+            model_scale,
+            pointnet_radius,
+            pointnet_nclusters,
+            bimanual=False):
+        # The number of input features for the encoder is 19: the x, y, z
+        # position of the point-cloud and the flattened 4x4=16 grasp pose matrix
+        if self.is_bimanual_v2:
+            self.encoder = base_network(pointnet_radius, pointnet_nclusters, 
+                                        model_scale, 35)
+        elif self.is_dgcnn:
+            self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 16, is_dgcnn=True, device=self.device)
+        else:
+            self.encoder = base_network(pointnet_radius, pointnet_nclusters,
+                                        model_scale, 19)
+        
+        self.encoder = base_network(pointnet_radius, pointnet_nclusters,
+                                    model_scale, 16)
+
+    def create_bottleneck(self, input_size, latent_size):
+        mu = nn.Linear(input_size, latent_size)
+        logvar = nn.Linear(input_size, latent_size)
+        self.latent_space = nn.ModuleList([mu, logvar])
+
+    def encode(self, xyz, xyz_features):
+        if self.is_dgcnn:
+            xyz_features = self.encoder[0](xyz, xyz_features)
+            return self.encoder[1](xyz_features.squeeze(-1))
+        else:
+            for module in self.encoder[0]:
+                # print()
+                # print(xyz.type(), xyz_features.type())
+                xyz, xyz_features = module(xyz, xyz_features)
+            return self.encoder[1](xyz_features.squeeze(-1))
+
+    def bottleneck(self, z):
+        return self.latent_space[0](z), self.latent_space[1](z)
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+        return mu + eps * std
+
+    def forward(self, pc, grasp=None, train=True):
+        if train:
+            return self.forward_train(pc, grasp)
+        else:
+            return self.forward_test(pc, grasp)
+
+    def forward_train(self, pc, grasp):
+        if self.is_dgcnn:
+            input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
+            input_features = torch.transpose(input_features, 1, 2).contiguous() # (64, 16, 1024)
+        else:
+            input_features = torch.cat(
+                (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
+                -1).transpose(-1, 1).contiguous()
+        start = time()
+        z = self.encode(pc, input_features) #(64, 1024)
+        end = time()
+        # print('encode time', end - start)
+        mu, logvar = self.bottleneck(z)
+        z = self.reparameterize(mu, logvar) # (96, 5)
+        if self.is_bimanual_v3:
+            dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=True)
+            return dir1, dir2, app1, app2, point1, point2, confidence, mu, logvar
+        else:
+            qt, confidence = self.decode(pc, z, self.is_bimanual_v2, self.is_dgcnn)
+            return qt, confidence, mu, logvar
+            
+    def forward_test(self, pc, grasp):
+        if self.is_dgcnn:
+            input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
+            input_features = torch.transpose(input_features, 1, 2).contiguous() # (64, 16, 1024)
+        else:
+            input_features = torch.cat(
+                (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
+                -1).transpose(-1, 1).contiguous()
+        
+        z = self.encode(pc, input_features)
+        # print(z.shape)
+        mu, _ = self.bottleneck(z)
+        # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>check device',z.device, pc.device)
+        if self.is_bimanual_v3:
+            dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, mu, self.is_bimanual_v2, is_bimanual_v3=True)
+            return dir1, dir2, app1, app2, point1, point2, confidence
+        else:
+            qt, confidence = self.decode(pc, mu, self.is_bimanual_v2, self.is_dgcnn)
+            return qt, confidence
+
+    def sample_latent(self, batch_size):
+        return torch.randn(batch_size, self.latent_size).to(self.device)
+
+    def generate_grasps(self, pc, z=None):
+        if z is None:
+            z = self.sample_latent(pc.shape[0])
+        if self.is_bimanual_v3:
+            dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=True)
+            return dir1, dir2, app1, app2, point1, point2, confidence, z.squeeze()
+        else:
+            qt, confidence = self.decode(pc, z, self.is_bimanual_v2)
+            return qt, confidence, z.squeeze()
+
+    def generate_dense_latents(self, resolution):
+        """
+        For the VAE sampler we consider dense latents to correspond to those between -2 and 2
+        """
+        latents = torch.meshgrid(*[
+            torch.linspace(-2, 2, resolution) for i in range(self.latent_size)
+        ])
+        return torch.stack([latents[i].flatten() for i in range(len(latents))],
+                           dim=-1).to(self.device)
+
+
+
+def base_network(pointnet_radius, pointnet_nclusters, scale, in_features, is_dgcnn=False, device='cuda', use_anchor=False):
     if is_dgcnn:
         base_dgcnn = BaseDgcnn(input_feature=in_features, device=device)
         fc_layer = nn.Sequential(nn.Linear(512 * scale, 1024 * scale),
@@ -495,6 +641,30 @@ def base_network(pointnet_radius, pointnet_nclusters, scale, in_features, is_dgc
                                 nn.Linear(1024 * scale, 1024 * scale),
                                 nn.BatchNorm1d(1024 * scale), nn.ReLU(True))
         return nn.ModuleList([base_dgcnn, fc_layer])
+    elif use_anchor:
+        sa1_module = pointnet2.PointnetSAModule(
+            npoint=pointnet_nclusters[0],
+            radius=pointnet_radius[0],
+            nsample=64,
+            mlp=[in_features, 64 * scale, 64 * scale, 128 * scale])
+        sa2_module = pointnet2.PointnetSAModule(
+            npoint=pointnet_nclusters[1], #32
+            radius=pointnet_radius[1], #0.04
+            nsample=128,
+            mlp=[128 * scale, 128 * scale, 128 * scale, 256 * scale])
+
+        sa3_module = pointnet2.PointnetSAModule(
+            mlp=[256 * scale, 256 * scale, 256 * scale, 512 * scale])
+
+        sa_modules = nn.ModuleList([sa1_module, sa2_module, sa3_module])
+        fc_layer = nn.Sequential(nn.Linear(512 * scale, 512 * scale),
+                                nn.BatchNorm1d(512 * scale), nn.ReLU(True))
+        
+        
+        
+        return nn.ModuleList([sa_modules, fc_layer])
+        
+
     else:
         sa1_module = pointnet2.PointnetSAModule(
             npoint=pointnet_nclusters[0],

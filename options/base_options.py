@@ -208,7 +208,7 @@ class BaseOptions:
             default=False,
         )
         self.parser.add_argument(
-            '--use_anchor',
+            '--use_block',
             type=bool,
             default=False
         )
@@ -273,8 +273,8 @@ class BaseOptions:
                 name += "_kl_loss_weight_" + str(self.opt.kl_loss_weight)
             if self.opt.use_point_loss:
                 name+= "_use_point_loss"
-            if self.opt.use_anchor:
-                name += "_use_anchor"
+            if self.opt.use_block:
+                name += "_use_block"
                 
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)
