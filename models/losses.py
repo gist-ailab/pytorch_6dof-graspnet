@@ -45,7 +45,8 @@ def control_point_l1_loss(pred_control_points,
                           device="cpu",
                           is_bimanual_v2=False,
                           point_loss=False,
-                          pred_middle_point=None):
+                          pred_middle_point=None,
+                          use_anchor=False):
     """
       Computes the l1 loss between the predicted control points and the
       groundtruth control points on the gripper.
@@ -53,6 +54,7 @@ def control_point_l1_loss(pred_control_points,
     #print('control_point_l1_loss', pred_control_points.shape,
     #      gt_control_points.shape)
     if not is_bimanual_v2:
+
         error = torch.sum(torch.abs(pred_control_points - gt_control_points), -1)
 
     else:
@@ -76,9 +78,11 @@ def control_point_l1_loss(pred_control_points,
             error2 = torch.sum(torch.abs(pred_control_points[1] - gt_control_points[1]), -1)
             
             error = error1 + error2
-    
-    error = torch.mean(error, -1)
+
+    if not use_anchor:
+        error = torch.mean(error, -1)
     if confidence is not None:
+
         assert (confidence_weight is not None)
         error *= confidence
         confidence_term = torch.mean(

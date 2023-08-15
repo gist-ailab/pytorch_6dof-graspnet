@@ -50,16 +50,29 @@ class GraspNetModel:
 
     def set_input(self, data):
         if not self.opt.is_bimanual_v2:
-            input_pcs = torch.from_numpy(data['pc']).contiguous()
-            input_grasps = torch.from_numpy(data['grasp_rt']).float()
-            if self.opt.arch == "evaluator":
-                targets = torch.from_numpy(data['labels']).float()
+            if self.opt.use_anchor:
+                input_pcs = torch.from_numpy(data['pc']).contiguous()
+                input_grasps = torch.from_numpy(data['anchor1']).float()
+                if self.opt.arch == "evaluator":
+                    targets = torch.from_numpy(data['labels']).float()
+                else:
+                    targets = torch.from_numpy(data['anchor1']).float()
+                self.pcs = input_pcs.to(self.device).requires_grad_(self.is_train)
+                self.grasps = input_grasps.to(self.device).requires_grad_(
+                    self.is_train)
+                self.targets = targets.to(self.device)
             else:
-                targets = torch.from_numpy(data['target_cps']).float()
-            self.pcs = input_pcs.to(self.device).requires_grad_(self.is_train)
-            self.grasps = input_grasps.to(self.device).requires_grad_(
-                self.is_train)
-            self.targets = targets.to(self.device)
+                input_pcs = torch.from_numpy(data['pc']).contiguous()
+                input_grasps = torch.from_numpy(data['grasp_rt']).float()
+                if self.opt.arch == "evaluator":
+                    targets = torch.from_numpy(data['labels']).float()
+                else:
+                    targets = torch.from_numpy(data['target_cps']).float()
+                self.pcs = input_pcs.to(self.device).requires_grad_(self.is_train)
+                self.grasps = input_grasps.to(self.device).requires_grad_(
+                    self.is_train)
+                self.targets = targets.to(self.device)
+        
         else:
             input_pcs = torch.from_numpy(data['pc']).contiguous()
             input_grasps1 = torch.from_numpy(data['grasp_rt1']).float()
@@ -92,17 +105,29 @@ class GraspNetModel:
     def backward(self, out):
         if self.opt.arch == 'vae':
             if not self.opt.is_bimanual_v2:
-                predicted_cp, confidence, mu, logvar = out
+                if self.opt.use_anchor:
+                    predicted_anchor, confidence, mu, logvar = out
+                    self.reconstruction_loss, self.confidence_loss = self.criterion[1](
+                        predicted_anchor,
+                        self.targets,
+                        confidence=confidence,
+                        confidence_weight=self.opt.confidence_weight,
+                        device=self.device,
+                        use_anchor=self.opt.use_anchor
+                    )
+                else:
+                    predicted_cp, confidence, mu, logvar = out
 
-                predicted_cp = utils.transform_control_points(
-                    predicted_cp, predicted_cp.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]# (64, 6, 3)
+                    predicted_cp = utils.transform_control_points(
+                        predicted_cp, predicted_cp.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]# (64, 6, 3)
 
-                self.reconstruction_loss, self.confidence_loss = self.criterion[1](
-                    predicted_cp,
-                    self.targets,
-                    confidence=confidence,
-                    confidence_weight=self.opt.confidence_weight,
-                    device=self.device)  
+                    self.reconstruction_loss, self.confidence_loss = self.criterion[1](
+                        predicted_cp,
+                        self.targets,
+                        confidence=confidence,
+                        confidence_weight=self.opt.confidence_weight,
+                        device=self.device)    
+                
             else:
                 if self.opt.is_bimanual_v3:
                     dir1, dir2, app1, app2, point1, point2, confidence, mu, logvar = out
@@ -136,6 +161,7 @@ class GraspNetModel:
                  
             self.kl_loss = self.opt.kl_loss_weight * self.criterion[0](
                     mu, logvar, device=self.device)
+
             self.loss = self.kl_loss + self.reconstruction_loss + self.confidence_loss
                 
         elif self.opt.arch == 'gan':
@@ -254,14 +280,24 @@ class GraspNetModel:
             else:    
                 if self.opt.arch == "vae":
                     if not self.opt.is_bimanual_v2:
-                        predicted_cp = utils.transform_control_points(
-                            prediction, prediction.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
-                        reconstruction_loss, _ = self.criterion[1](
-                            predicted_cp,
-                            self.targets,
-                            confidence=confidence,
-                            confidence_weight=self.opt.confidence_weight,
-                            device=self.device)
+                        if self.opt.use_anchor:
+                            reconstruction_loss, _ = self.criterion[1](
+                                prediction,
+                                self.targets,
+                                confidence=confidence,
+                                confidence_weight=self.opt.confidence_weight,
+                                device=self.device,
+                                use_anchor=self.opt.use_anchor)
+                        else:
+                            predicted_cp = utils.transform_control_points(
+                                prediction, prediction.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]
+                            reconstruction_loss, _ = self.criterion[1](
+                                predicted_cp,
+                                self.targets,
+                                confidence=confidence,
+                                confidence_weight=self.opt.confidence_weight,
+                                device=self.device)
+                            
                         return reconstruction_loss, 1
                     else:
                         if self.opt.is_bimanual_v3:
