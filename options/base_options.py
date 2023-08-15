@@ -248,9 +248,10 @@ class BaseOptions:
             name = self.opt.arch
             name += "_lr_" + str(self.opt.lr).split(".")[-1] + "_bs_" + str(
                 self.opt.batch_size)
-            name += "_scale_" + str(self.opt.model_scale) + "_npoints_" + str(
-                self.opt.pointnet_nclusters) + "_radius_" + str(
-                    self.opt.pointnet_radius).split(".")[-1]
+            name += "_scale_" + str(self.opt.model_scale)
+            # "_npoints_" + str(
+            #     self.opt.pointnet_nclusters) + "_radius_" + str(
+            #         self.opt.pointnet_radius).split(".")[-1]
             if self.opt.arch == "vae" or self.opt.arch == "gan":
                 name += "_latent_size_" + str(self.opt.latent_size)
             if self.opt.is_bimanual:
