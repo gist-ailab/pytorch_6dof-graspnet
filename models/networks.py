@@ -528,8 +528,8 @@ class GraspSamplerVAEBlock(GraspSampler):
         if self.is_bimanual_v2:
             self.encoder = base_network(pointnet_radius, pointnet_nclusters, 
                                         model_scale, 35)
-        elif self.is_dgcnn:
-            self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 16, is_dgcnn=True, device=self.device)
+        # elif self.is_dgcnn:
+        #     self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 16, is_dgcnn=True, device=self.device)
         else:
             self.encoder = base_network(pointnet_radius, pointnet_nclusters,
                                         model_scale, 19)

@@ -11,6 +11,7 @@ from time import time
 from tqdm import tqdm
 import open3d as o3d
 from autolab_core import RigidTransform
+import trimesh
 
 class GraspSamplingData(BaseDataset):
     def __init__(self, opt):
@@ -867,6 +868,46 @@ class BimanualBlockGraspSamplingData(BaseDataset):
         # sample points from the object
         pc = object_model.sample(self.opt.npoints)
         pc = pc.astype(np.float32)
+        
+        cell_bounds = np.linspace(object_model.bounds[0,:]-0.1, object_model.bounds[1,:]+0.1, 4)
+        diag_center = np.zeros((len(cell_bounds)-1, 3))
+        cell_centers = []
+        for i in range(len(cell_bounds)-1):
+            diag_center[i] = (cell_bounds[i+1,:] + cell_bounds[i, :])/2
+        for x in diag_center[:, 0]:
+            for y in diag_center[:, 1]:
+                for z in diag_center[:, 2]:
+                    cell_centers.append([x, y, z])
+        submesh_list = []
+        bbox_list = []
+        
+        for cell_center in cell_centers:
+            bbox = trimesh.creation.box(extents=(cell_bounds[1,:]-cell_bounds[0,:] + 2*0.1), transform=RigidTransform(np.eye(3), cell_center).matrix)
+            submesh = object_model.slice_plane(bbox.facets_origin, -bbox.facets_normal)
+            bbox_list.append(bbox)
+            submesh_list.append(submesh)
+        trimesh.Scene(bbox_list).show(flags={'wireframe': True})
+        trimesh.Scene(bbox_list+[object_model]).show(flags={'wireframe': True})
+
+        for i in range(len(cell_centers)):
+            trimesh.Scene([submesh_list[i]]).show()
+        
+        exit()
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(pc)
+        pcd.paint_uniform_color([0, 0, 0])
+        r = 0.1
+        center = [0, 0, 0]
+        bbox = o3d.geometry.AxisAlignedBoundingBox(
+            min_bound=[center[0] - r, center[1] - r, center[2] - r],
+            max_bound=[center[0] + r, center[1] + r, center[2] + r]
+        )
+        cropped_pcd = pcd.crop(bbox)
+        cropped_pcd.paint_uniform_color([1, 0, 0])
+        # o3d.visualization.draw_geometries([pcd])
+        o3d.visualization.draw_geometries([pcd, cropped_pcd])
+        exit()
+        
         output_grasps1 = pos_grasps[:, 0, :, :]
         # output_grasps2 = pos_grasps[:, 1, :, :]
         # output_grasps1 = output_grasps1[:, 3, :3]
