@@ -669,7 +669,9 @@ class GraspSamplerVAEAnchor(GraspSampler):
     
     def create_anchor_layer(self, model_scale, input_size=3):
         anchor_layer = nn.Sequential(nn.Linear(input_size*model_scale, 16*model_scale),
+                                     nn.ReLU(),
                                      nn.Linear(16*model_scale, 32*model_scale),
+                                     nn.ReLU(),
                                      nn.Linear(32*model_scale, 64*model_scale))
         self.anchor_layer = nn.ModuleList([anchor_layer])
          
@@ -680,8 +682,10 @@ class GraspSamplerVAEAnchor(GraspSampler):
         self.mlp2 = nn.Linear(128, 32)
         self.mlp3 = nn.Linear(32, 32)
         
-        encoder = nn.Sequential(self.mlp1, nn.ReLU(),
-                                self.mlp2, nn.ReLU(),
+        encoder = nn.Sequential(self.mlp1, 
+                                nn.BatchNorm1d(128), nn.ReLU(),
+                                self.mlp2, 
+                                nn.BatchNorm1d(32), nn.ReLU(),
                                 self.mlp3)
         self.encoder = nn.ModuleList([encoder])
     
