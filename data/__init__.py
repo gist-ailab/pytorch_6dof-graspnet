@@ -29,7 +29,7 @@ def CreateDataset(opt, is_train=True):
         if opt.is_bimanual:
             dataset = BimanualGraspEvaluatorDataset(opt)
         else:
-            dataset = GraspEvaluatorData(opt, is_train=is_train)
+            dataset = GraspEvaluatorData(opt)
     return dataset
 
 

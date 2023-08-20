@@ -68,6 +68,7 @@ class GraspNetModel:
                     targets = torch.from_numpy(data['labels']).float()
                 else:
                     targets = torch.from_numpy(data['target_cps']).float()
+
                 self.pcs = input_pcs.to(self.device).requires_grad_(self.is_train)
                 self.grasps = input_grasps.to(self.device).requires_grad_(
                     self.is_train)
@@ -85,7 +86,7 @@ class GraspNetModel:
                 targets1 = torch.from_numpy(data['target_cps1']).float()
                 targets2 = torch.from_numpy(data['target_cps2']).float()
                 targets = torch.cat([targets1.unsqueeze(0), targets2.unsqueeze(0)], dim=0)
-                
+
             self.pcs = input_pcs.to(self.device).requires_grad_(self.is_train)
             self.grasps = input_grasps.to(self.device).requires_grad_(self.is_train)
             self.targets = targets.to(self.device)
