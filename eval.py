@@ -144,8 +144,7 @@ class Evaluator():
                 os.path.join(self._cfg.dataset_root_folder, json_path), True
             )in_camera_pose = d['camera_pose']
             self._grasp_reader.change_object(obj_grasp_data[-2], obj_grasp_data[-1])
-            pc, camera_pose, _= self._grasp_reader.render_random
-                                            _scene(in_camera_pose)
+            pc, camera_pose, _= self._grasp_reader.render_random_scene(in_camera_pose)
          
                 
         pos_grasps = np.matmul(np.expand_dims(camera_pose, 0), obj_grasp_data[0])
@@ -154,10 +153,9 @@ class Evaluator():
         grasp_labels = np.hstack(
                               
             (np.ones(pos_grasps.shape[0]), np.zeros(neg_grasps.shape[0]))).astype(np.int32)
-        grasps = np.concatenate((pos_grasp
-            s, neg_grasps), 0)
+        grasps = np.concatenate((pos_grasps, neg_grasps), 0)
         
-if visualize:
+        if visualize:
             from visualization_utils import draw_scene
             import mayavi.mlab as mlab
 
@@ -183,7 +181,6 @@ if visualize:
            
            
            
-    }
     def eval_scene(self, file_path, visualize=False):
         """
           Returns full_results, evaluator_results.
@@ -236,7 +233,7 @@ if visualize:
             canonical_pc += mesh_mean
             generated_grasps_canonical[:, :3, 3] += mesh_mean
             
-if visualize:
+            if visualize:
                 from visualization_utils import draw_scene
                 import mayavi.mlab as mlab
 
@@ -251,7 +248,7 @@ if visualize:
                           
                           
             
-full_results = (generated_grasps_canonical, generated_scores, gt_pos_grasps_canonical, flex_info['cad_path'], flex_info['cad_scale'])
+        full_results = (generated_grasps_canonical, generated_scores, gt_pos_grasps_canonical, flex_info['cad_path'], flex_info['cad_scale'])
 
                            
                            

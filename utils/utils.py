@@ -279,7 +279,7 @@ def get_gripper_pc(batch_size, npoints, use_torch=True):
 
     if use_torch:
         output = torch.tensor(output, torch.float32)
-        output = output.repeat(batch, size, 1, 1)
+        output = output.repeat(batch_size, 1, 1)
         return output
     else:
         output = np.tile(output, [batch_size, 1, 1])
@@ -293,13 +293,17 @@ def get_control_point_tensor(batch_size, use_torch=True, device="cpu", is_bimanu
       use_tf: switches between outputing a tensor and outputing a numpy array.
     """
     
-    control_points = np.load('./gripper_control_points/panda.npy')[:, :3]
+    
     if is_bimanual or is_bimanual_v2:
-        control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, -7.27595772e-12, 0],
-                          [-0.0425, -7.27595772e-12, 0], [0.0425, -7.27595772e-12, 0.0675],
-                          [-0.0425, -7.27595772e-12, 0.0675]]
+        # control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, -7.27595772e-12, 0],
+        #                   [-0.0425, -7.27595772e-12, 0], [0.0425, -7.27595772e-12, 0.0675],
+        #                   [-0.0425, -7.27595772e-12, 0.0675]]
+        control_points = [[0,0,-0.03375], [0,0,-0.03375], [0.0425, 0, 0],
+                          [-0.0425, 0, 0], [0.0425, 0, 0.0675],
+                          [-0.0425, 0, 0.0675]]
         
     else:
+        control_points = np.load('./gripper_control_points/panda.npy')[:, :3]
         control_points = [[0, 0, 0], [0, 0, 0], control_points[0, :],
                         control_points[1, :], control_points[-2, :],
                         control_points[-1, :]]
@@ -313,6 +317,19 @@ def get_control_point_tensor(batch_size, use_torch=True, device="cpu", is_bimanu
 
     return control_points
 
+def transform_control_points_v3(approach, direction, point, batch_size, device="cpu", gripper_depth=0.0675):
+    control_points = get_control_point_tensor(batch_size, device=device, is_bimanual=True) #
+    shape = control_points.shape
+    pad_ones1 = torch.ones((shape[0], shape[1], 1), dtype=torch.float32, device=device)
+    control_points = torch.cat((control_points, pad_ones1), dim=-1)
+    #compute homogenous transformation matrix from approach, direction, point
+    grasps_R = torch.stack([direction, torch.cross(approach, direction), approach], dim=2)
+    grasps_t = point - gripper_depth * approach
+    homog_vec = torch.tensor([0, 0, 0, 1], dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0).repeat(batch_size, 1, 1)
+    grasps = torch.cat((torch.cat((grasps_R, grasps_t.unsqueeze(2)), dim=2), homog_vec), dim=1)
+    
+    return torch.matmul(control_points, grasps.permute(0, 2, 1))
+    
 
 def transform_control_points(gt_grasps, batch_size, mode='qt', device="cpu", is_bimanual=False):
     """

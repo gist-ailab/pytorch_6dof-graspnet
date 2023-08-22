@@ -135,15 +135,17 @@ class BaseOptions:
         )
         self.parser.add_argument(
             '--pointnet_radius',
-            help='Radius for ball query for PointNet++, just the first layer',
+            help='Radius for ball query for PointNet++, just the first layer', #0.02, 0.04
             type=float,
-            default=0.02)
+            # default=0.02,
+            nargs='+')
         self.parser.add_argument(
             '--pointnet_nclusters',
             help=
-            'Number of cluster centroids for PointNet++, just the first layer',
+            'Number of cluster centroids for PointNet++, just the first layer', #128, 32
             type=int,
-            default=128)
+            # default=128,
+            nargs='+')
         self.parser.add_argument(
             '--init_type',
             type=str,
@@ -195,6 +197,31 @@ class BaseOptions:
             type=bool,
             default=False,
         )
+        self.parser.add_argument(
+            '--is_bimanual_v3',
+            type=bool,
+            default=False,
+        )
+        self.parser.add_argument(
+            '--use_point_loss',
+            type=bool,
+            default=False,
+        )
+        self.parser.add_argument(
+            '--use_block',
+            type=bool,
+            default=False
+        )
+        self.parser.add_argument(
+            '--use_anchor',
+            type=bool,
+            default=False
+        )
+        self.parser.add_argument(
+            '--use_test_reparam',
+            type=bool,
+            default=False
+        )
     def parse(self):
         if not self.initialized:
             self.initialize()
@@ -235,15 +262,18 @@ class BaseOptions:
             name = self.opt.arch
             name += "_lr_" + str(self.opt.lr).split(".")[-1] + "_bs_" + str(
                 self.opt.batch_size)
-            name += "_scale_" + str(self.opt.model_scale) + "_npoints_" + str(
-                self.opt.pointnet_nclusters) + "_radius_" + str(
-                    self.opt.pointnet_radius).split(".")[-1]
+            name += "_scale_" + str(self.opt.model_scale)
+            # "_npoints_" + str(
+            #     self.opt.pointnet_nclusters) + "_radius_" + str(
+            #         self.opt.pointnet_radius).split(".")[-1]
             if self.opt.arch == "vae" or self.opt.arch == "gan":
                 name += "_latent_size_" + str(self.opt.latent_size)
             if self.opt.is_bimanual:
                 name += "_bimanual"
             if self.opt.is_bimanual_v2:
                 name += "_bimanual_v2"
+            if self.opt.is_bimanual_v3:
+                name += "_bimanual_v3"
             if self.opt.seed is not None:
                 name += "_seed_" + str(self.opt.seed)
             if self.opt.is_dgcnn:
@@ -252,6 +282,14 @@ class BaseOptions:
                 name += "_npoints_" + str(self.opt.npoints)
             if self.opt.kl_loss_weight != 0.01:
                 name += "_kl_loss_weight_" + str(self.opt.kl_loss_weight)
+            if self.opt.use_point_loss:
+                name+= "_use_point_loss"
+            if self.opt.use_block:
+                name += "_use_block"
+            if self.opt.use_anchor:
+                name += "_use_anchor"
+            if self.opt.use_test_reparam:
+                name += "_use_test_reparam"
                 
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)

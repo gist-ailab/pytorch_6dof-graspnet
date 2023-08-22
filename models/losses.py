@@ -43,7 +43,10 @@ def control_point_l1_loss(pred_control_points,
                           confidence=None,
                           confidence_weight=None,
                           device="cpu",
-                          is_bimanual_v2=False):
+                          is_bimanual_v2=False,
+                          point_loss=False,
+                          pred_middle_point=None,
+                          use_anchor=False):
     """
       Computes the l1 loss between the predicted control points and the
       groundtruth control points on the gripper.
@@ -51,16 +54,35 @@ def control_point_l1_loss(pred_control_points,
     #print('control_point_l1_loss', pred_control_points.shape,
     #      gt_control_points.shape)
     if not is_bimanual_v2:
+
         error = torch.sum(torch.abs(pred_control_points - gt_control_points), -1)
 
     else:
-        # print(pred_control_points.shape)
-        error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1)
-        error2 = torch.sum(torch.abs(pred_control_points[1] - gt_control_points[1]), -1)
-        error = error1 + error2
-    
-    error = torch.mean(error, -1)
+        if point_loss:
+            assert pred_middle_point is not None
+            error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1)
+            error2 = torch.sum(torch.abs(pred_control_points[1] - gt_control_points[1]), -1)
+            
+            gt_middle_point1 = (gt_control_points[0,:,4] + gt_control_points[0,:,5]) / 2
+            gt_middle_point2 = (gt_control_points[1,:,4] + gt_control_points[1,:,5]) / 2
+            error_point1 = torch.sum(torch.abs(pred_middle_point[0] - gt_middle_point1), -1)
+            error_point2 = torch.sum(torch.abs(pred_middle_point[1] - gt_middle_point2), -1)
+
+            error1 = torch.cat((error1, error_point1.unsqueeze(-1)), -1)
+            error2 = torch.cat((error2, error_point2.unsqueeze(-1)), -1)
+            
+            error = error1 + error2
+        else:
+
+            error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1)
+            error2 = torch.sum(torch.abs(pred_control_points[1] - gt_control_points[1]), -1)
+            
+            error = error1 + error2
+
+    if not use_anchor:
+        error = torch.mean(error, -1)
     if confidence is not None:
+
         assert (confidence_weight is not None)
         error *= confidence
         confidence_term = torch.mean(
@@ -100,7 +122,10 @@ def min_distance_loss(pred_control_points,
                       confidence=None,
                       confidence_weight=None,
                       threshold=None,
-                      device="cpu"):
+                      device="cpu",
+                      is_bimanual_v2=False,
+                      point_loss=False,
+                      pred_middle_point=None):
     """
     Computes the minimum distance (L1 distance)between each gt control point 
     and any of the predicted control points.
@@ -116,25 +141,60 @@ def min_distance_loss(pred_control_points,
     pred_shape = pred_control_points.shape
     gt_shape = gt_control_points.shape
 
-    if len(pred_shape) != 3:
-        raise ValueError(
-            "pred_control_point should have len of 3. {}".format(pred_shape))
-    if len(gt_shape) != 3:
-        raise ValueError(
-            "gt_control_point should have len of 3. {}".format(gt_shape))
-    if pred_shape != gt_shape:
-        raise ValueError("shapes do no match {} != {}".format(
-            pred_shape, gt_shape))
+    # if len(pred_shape) != 3:
+    #     raise ValueError(
+    #         "pred_control_point should have len of 3. {}".format(pred_shape))
+    # if len(gt_shape) != 3:
+    #     raise ValueError(
+    #         "gt_control_point should have len of 3. {}".format(gt_shape))
+    # if pred_shape != gt_shape:
+    #     raise ValueError("shapes do no match {} != {}".format(
+    #         pred_shape, gt_shape))
 
     # N_pred x Ngt x M x 3
-    error = pred_control_points.unsqueeze(1) - gt_control_points.unsqueeze(0)
-    error = torch.sum(torch.abs(error),
-                      -1)  # L1 distance of error (N_pred, N_gt, M)
-    error = torch.mean(
-        error, -1)  # average L1 for all the control points. (N_pred, N_gt)
+    if not is_bimanual_v2:
+        error = pred_control_points.unsqueeze(1) - gt_control_points.unsqueeze(0)
+        error = torch.sum(torch.abs(error),
+                        -1)  # L1 distance of error (N_pred, N_gt, M)
+        error = torch.mean(
+            error, -1)  # average L1 for all the control points. (N_pred, N_gt)
 
-    min_distance_error, closest_index = error.min(
-        0)  #[0]  # take the min distance for each gt control point. (N_gt)
+        min_distance_error, closest_index = error.min(
+            0)  #[0]  # take the min distance for each gt control point. (N_gt)
+    else:
+        if point_loss:
+            assert pred_middle_point is not None
+            error1 = pred_control_points[0].unsqueeze(1) - gt_control_points[0].unsqueeze(0) # (N_pred, N_gt, M, 3)
+            error2 = pred_control_points[1].unsqueeze(1) - gt_control_points[1].unsqueeze(0) # (N_pred, N_gt, M, 3)
+            error1 = torch.sum(torch.abs(error1), -1)  # L1 distance of error (N_pred, N_gt, M)
+            error2 = torch.sum(torch.abs(error2), -1)  # L1 distance of error (N_pred, N_gt, M)
+
+            gt_middle_point1 = (gt_control_points[0,:,4] + gt_control_points[0,:,5]) / 2
+            gt_middle_point2 = (gt_control_points[1,:,4] + gt_control_points[1,:,5]) / 2
+            error_point1 = pred_middle_point[0].unsqueeze(1) - gt_middle_point1.unsqueeze(0)
+            error_point2 = pred_middle_point[1].unsqueeze(1) - gt_middle_point2.unsqueeze(0)
+
+            error_point1 = torch.sum(torch.abs(error_point1), -1).unsqueeze(-1)  # L1 distance of error (N_pred, N_gt, M)
+            error_point2 = torch.sum(torch.abs(error_point2), -1).unsqueeze(-1)  # L1 distance of error (N_pred, N_gt, M)
+            
+            error1 = torch.cat((error1, error_point1), -1)
+            error2 = torch.cat((error2, error_point2), -1)
+
+            error = error1 + error2
+            error = torch.mean(error, -1)
+            min_distance_error, closest_index = error.min(0)
+
+
+        else:
+            error1 = pred_control_points[0].unsqueeze(1) - gt_control_points[0].unsqueeze(0) # (N_pred, N_gt, M, 3)
+            error2 = pred_control_points[1].unsqueeze(1) - gt_control_points[1].unsqueeze(0) # (N_pred, N_gt, M, 3)
+            error1 = torch.sum(torch.abs(error1), -1)  # L1 distance of error (N_pred, N_gt, M)
+            error2 = torch.sum(torch.abs(error2), -1)  # L1 distance of error (N_pred, N_gt, M)
+            error  = error1 + error2
+            error = torch.mean(error, -1)
+            min_distance_error, closest_index = error.min(0)
+
+
     #print('min_distance_error', get_shape(min_distance_error))
     if confidence is not None:
         #print('closest_index', get_shape(closest_index))
