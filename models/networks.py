@@ -81,7 +81,7 @@ def define_classifier(opt, gpu_ids, arch, init_type, init_gain, device):
         else:
             net = GraspSamplerVAE(opt.model_scale, opt.pointnet_radius,
                                 opt.pointnet_nclusters, opt.latent_size, device, 
-                                opt.is_bimanual_v2, opt.is_dgcnn, opt.is_bimanual_v3)
+                                opt.is_bimanual_v2, opt.is_dgcnn, opt.is_bimanual_v3, use_test_reparam=opt.use_test_reparam)
     elif arch == 'gan':
         net = GraspSamplerGAN(opt.model_scale, opt.pointnet_radius,
                               opt.pointnet_nclusters, opt.latent_size, device, opt.is_bimanual_v2, opt.is_bimanual_v3)
@@ -253,13 +253,15 @@ class GraspSamplerVAE(GraspSampler):
                  device="cpu",
                  is_bimanual_v2=False,
                  is_dgcnn=False,
-                 is_bimanual_v3=False):
+                 is_bimanual_v3=False,
+                 use_test_reparam=False):
         super(GraspSamplerVAE, self).__init__(latent_size, device)
         self.device = device
 
         self.is_bimanual_v2 = is_bimanual_v2
         self.is_bimanual_v3 = is_bimanual_v3
         self.is_dgcnn = is_dgcnn
+        self.use_test_reparam = use_test_reparam
         self.create_encoder(model_scale, pointnet_radius, pointnet_nclusters, self.is_dgcnn)
 
         if self.is_dgcnn:
@@ -353,8 +355,12 @@ class GraspSamplerVAE(GraspSampler):
         
         z = self.encode(pc, input_features)
         # print(z.shape)
-        mu, _ = self.bottleneck(z)
+        mu, logvar = self.bottleneck(z)
         # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>check device',z.device, pc.device)
+        #* check if we use logvar when testing
+        if self.use_test_reparam:
+            mu = self.reparameterize(mu, logvar) # (96, 5)
+        
         if self.is_bimanual_v3:
             dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, mu, self.is_bimanual_v2, is_bimanual_v3=True)
             return dir1, dir2, app1, app2, point1, point2, confidence
