@@ -217,6 +217,11 @@ class BaseOptions:
             type=bool,
             default=False
         )
+        self.parser.add_argument(
+            '--use_test_reparam',
+            type=bool,
+            default=False
+        )
     def parse(self):
         if not self.initialized:
             self.initialize()
@@ -282,6 +287,8 @@ class BaseOptions:
                 name += "_use_block"
             if self.opt.use_anchor:
                 name += "_use_anchor"
+            if self.opt.use_test_reparam:
+                name += "_use_test_reparam"
                 
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)

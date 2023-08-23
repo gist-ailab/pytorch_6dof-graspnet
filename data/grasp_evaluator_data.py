@@ -205,6 +205,7 @@ class GraspEvaluatorData(BaseDataset):
 
         positive_clusters = self.sample_grasp_indexes(num_positive, pos_grasps,
                                                       pos_qualities)
+
         num_negative = self.opt.num_grasps_per_object - num_positive
         negative_clusters = self.sample_grasp_indexes(num_negative, neg_grasps,
                                                       neg_qualities)
@@ -321,20 +322,59 @@ class BimanualGraspEvaluatorDataset(BaseDataset):
     def __getitem__(self, index):
         path = self.paths[index]
         data = self.get_bimanual_evaluator_data(path)    
+
+        gt_control_points1 = utils.transform_control_points_numpy(
+            data[1][:,0,:,:], self.opt.num_grasps_per_object, mode='rt',is_bimanual=True)
+        gt_control_points2 = utils.transform_control_points_numpy(
+            data[1][:,1,:,:], self.opt.num_grasps_per_object, mode='rt',is_bimanual=True)
+
+        meta = {}
+        meta['pc'] = np.array([data[0]] * self.opt.num_grasps_per_object)[:,:,:3]
+        meta['grasp_rt1'] = gt_control_points1[:, :, :3]
+        meta['grasp_rt2'] = gt_control_points2[:, :, :3]
+        meta['labels'] = data[2]
+        meta['quality'] = data[3]
+        meta['cad_path'] = data[4]
+        meta['cad_scale'] = data[5]
+        
+        return meta
         
     
     def make_dataset(self):
         files = []
         file_list = os.listdir(os.path.join(self.opt.dataset_root_folder,
-                               'grasps_processed'))
-        files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
-        
-        if not self.is_train:
-            files = files[200:250]
-        else:
-            files = files[:200]
+                               'grasps'))
+        files = [os.path.join(self.opt.dataset_root_folder, 'grasps', file) for file in file_list]
+        files_proccessed = []
+        for file in files:
+            h5_file = h5py.File(file, 'r')
+            force_closure = np.array(h5_file["/grasps/qualities/Force_closure"])
+            torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
+            dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
+            
+            force_closure_weight = 0.4
+            dexterity_weight = 0.5
+            torque_optimization_weight = 0.1
+            
+            
+            sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
+                            dexterity_weight * dexterity
 
-        return files
+            sum_quality = sum_quality.reshape(-1)
+            sum_quality_idx = np.where(sum_quality.reshape(-1) > 0.92)[0]
+
+            if len(sum_quality_idx) == 0:
+                print('no grasp quality is over 0.92')
+                continue
+            
+            files_proccessed.append(file)  
+            
+        if not self.is_train:
+            files_proccessed = files_proccessed[100:120]
+        else:
+            files_proccessed = files_proccessed[:100]
+
+        return files_proccessed
     
     
     def set_ratios(self, ratio):
@@ -344,7 +384,7 @@ class BimanualGraspEvaluatorDataset(BaseDataset):
     
     
     def get_bimanual_evaluator_data(self, path, verify_grasps=False):
-        pos_grasps, pos_qualities, obj_mesh, cad_path, cad_scale = self.read_grasp_file(path)
+        pos_grasps, pos_qualities, neg_grasps, neg_qualities, object_model, cad_path, cad_scale = self.read_grasp_file(path)
         output_pcs = []
         output_grasps = []
         output_qualities = []
@@ -356,34 +396,50 @@ class BimanualGraspEvaluatorDataset(BaseDataset):
         num_positive = int(self.opt.num_grasps_per_object *
                            self.ratio_positive)
         num_negative = self.opt.num_grasps_per_object - num_positive
-        sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
-        
+        sampled_pos_grasp_idxs = np.random.choice(range(len(pos_grasps)), num_positive)
+        sampled_neg_grasp_idxs = np.random.choice(range(len(neg_grasps)), num_negative)
         # Fill in positive grasp data
         hard_neg_candidates = []
-        for idx in sampled_grasp_idxs:
+        for idx in sampled_pos_grasp_idxs:
             selected_grasp = pos_grasps[idx]
             selected_quality = pos_qualities[idx]
             output_grasps.append(selected_grasp)
             output_qualities.append(selected_quality)
             output_labels.append(1)
-            hard_neg_candidates += utils.perturb_grasp(
-                selected_grasp,
-                self.collision_hard_neg_num_perturbations,
-                self.collision_hard_neg_min_translation,
-                self.collision_hard_neg_max_translation,
-                self.collision_hard_neg_min_rotation,
-                self.collision_hard_neg_max_rotation,
-            )
-            
-        if path not in self.collision_hard_neg_queue or self.collision_hard_neg_queue[path].qsize() < num_negative:
-            if path not in self.collision_hard_neg_queue:
-                self.collision_hard_neg_queue[path] = Queue()
-            # add hard negative samples from positive grasps
-            random_selector = np.random.rand()
-            if random_selector < self.ratio_hardnegative:
-                collisions, heuristic_qualities = utils.evaluate_grasps(
-                    hard_neg_candidates, obj_mesh
-                )
+            # hard_neg_candidates += utils.perturb_grasp(
+            #     selected_grasp,
+            #     self.collision_hard_neg_num_perturbations,
+            #     self.collision_hard_neg_min_translation,
+            #     self.collision_hard_neg_max_translation,
+            #     self.collision_hard_neg_min_rotation,
+            #     self.collision_hard_neg_max_rotation,
+            # )
+          
+        # if path not in self.collision_hard_neg_queue or self.collision_hard_neg_queue[path].qsize() < num_negative:
+        #     if path not in self.collision_hard_neg_queue:
+        #         self.collision_hard_neg_queue[path] = Queue()
+        #     # add hard negative samples from positive grasps
+        #     random_selector = np.random.rand()
+        #     if random_selector < self.ratio_hardnegative:
+        #         collisions, heuristic_qualities = utils.evaluate_grasps(
+        #             hard_neg_candidates, obj_mesh
+        #         )
+        for idx in sampled_neg_grasp_idxs:
+            selected_grasp = neg_grasps[idx]
+            selected_quality = neg_qualities[idx]
+            output_grasps.append(selected_grasp)
+            output_qualities.append(selected_quality)
+            output_labels.append(0)
+        
+        pc = object_model.sample(self.opt.npoints)
+        pc = pc.astype(np.float32)
+        
+        output_pcs = np.asarray(pc, dtype=np.float32)
+        output_grasps = np.asarray(output_grasps, dtype=np.float32)
+        output_labels = np.asarray(output_labels, dtype=np.int32)
+        output_qualities = np.asarray(output_qualities, dtype=np.float32)
+        
+        return output_pcs, output_grasps, output_labels, output_qualities, output_cad_paths, output_cad_scales
             
         
     def read_grasp_file(self, path, return_all_grasps=False):
@@ -392,18 +448,17 @@ class BimanualGraspEvaluatorDataset(BaseDataset):
             pos_grasps, pos_qualities, cad, cad_path, cad_scale = copy.deepcopy(
                 self.cache[file_name])
             return pos_grasps, pos_qualities, cad, cad_path, cad_scale
-        
-        pos_grasps, pos_qualities, cad, cad_path, cad_scale = self.read_object_grasp_data(
+
+        pos_grasps, pos_qualities, neg_grasps, neg_qualities,cad, cad_path, cad_scale = self.read_object_grasp_data(
             path,
             ratio_of_grasps_to_be_used=self.opt.grasps_ratio,
             return_all_grasps=return_all_grasps)
 
-        
         if self.caching:
-            self.cache[file_name] = (pos_grasps, pos_qualities, cad, cad_path, cad_scale)
+            self.cache[file_name] = (pos_grasps, pos_qualities, neg_grasps, neg_qualities, cad, cad_path, cad_scale)
             return copy.deepcopy(self.cache[file_name])
         
-        return pos_grasps, pos_qualities, cad, cad_path, cad_scale
+        return pos_grasps, pos_qualities, neg_grasps, neg_qualities, cad, cad_path, cad_scale
     
     
     def read_object_grasp_data(self, 
@@ -412,7 +467,7 @@ class BimanualGraspEvaluatorDataset(BaseDataset):
                                ratio_of_grasps_to_be_used=1, 
                                return_all_grasps=False):
         
-        num_clusters = self.opt.num_grasp_clusters
+        num_clusters = 16
         root_folder = self.opt.dataset_root_folder
         mesh_root = 'meshes'
         
@@ -426,17 +481,44 @@ class BimanualGraspEvaluatorDataset(BaseDataset):
         mesh_scale = h5_file['object/scale'][()]
         # load and rescale, translate object mesh
         object_model = Object(os.path.join(root_folder, mesh_root, mesh_fname))
-
-
+        # object_model.rescale(mesh_scale)
+        # object_model = object_model.mesh
+        # object_mean = np.mean(object_model.vertices, 0, keepdims=1)
+        # object_model.vertices -= object_mean
+        
         object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
         object_model.rescale(mesh_scale)
         object_mean = object_model.mesh.centroid
-        object_model = object_model.mesh        
-        # load fileterd unique single grasp
+        object_model = object_model.mesh 
+        # load bimanual grasp
+        grasps = np.asarray(h5_file['grasps/transforms'])
+        grasps[:, :, :3, 3] -= object_mean
+        
+        # scale each grasp quality and sum them up
+        force_closure = np.array(h5_file["/grasps/qualities/Force_closure"])
+        torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
+        dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
+        
+        force_closure_weight = 0.4
+        torque_optimization_weight = 0.1
+        dexterity_weight = 0.5
+        
+        sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
+                        dexterity_weight * dexterity
+        
+        # print(sum_quality.shape)
+        sum_quality = sum_quality.reshape(-1)
+        sum_quality_positive_idx = np.where(sum_quality.reshape(-1) > 0.92)[0]
+        # sum_quality_negative_idx = np.where((sum_quality.reshape(-1) <= 0.92) & (sum_quality.reshape(-1) > 0.85))[0]
+        sum_quality_negative_idx = np.where(sum_quality.reshape(-1) <= 0.92)[0]
+        # print(sum_quality_positive_idx.shape)
+        # print(sum_quality_negative_idx.shape)
 
-        single_grasp = np.array(h5_file["grasps/single_grasps"])
+        positive_grasps = grasps[sum_quality_positive_idx]
+        negative_grasps = grasps[sum_quality_negative_idx]
 
-        single_grasp[:, :3, 3] -= object_mean
-        single_grasp_quality = np.array(h5_file["grasps/single_grasps_quality"])
+        positive_quality = sum_quality[sum_quality_positive_idx]
+        negative_quality = sum_quality[sum_quality_negative_idx]
 
-        return single_grasp, single_grasp_quality, object_model, os.path.join(root_folder, mesh_root, mesh_fname), mesh_scale
+        return positive_grasps, positive_quality, negative_grasps, negative_quality, object_model, os.path.join(root_folder, mesh_root, mesh_fname), mesh_scale
+    

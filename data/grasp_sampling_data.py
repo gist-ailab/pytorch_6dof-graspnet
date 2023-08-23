@@ -656,10 +656,10 @@ class BimanualGraspSamplingDataV3(BaseDataset):
                             dexterity_weight * dexterity
 
             sum_quality = sum_quality.reshape(-1)
-            sum_quality_idx = np.where(sum_quality.reshape(-1) > 0.85)[0]
+            sum_quality_idx = np.where(sum_quality.reshape(-1) > 0.92)[0]
 
             if len(sum_quality_idx) == 0:
-                print('no grasp quality is over 0.85')
+                print('no grasp quality is over 0.92')
                 continue
             
             files_proccessed.append(file)  
@@ -679,7 +679,11 @@ class BimanualGraspSamplingDataV3(BaseDataset):
         meta = {}
         
         #sample grasp idx for data loading
-        sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object, replace=False)
+        if pos_grasps.shape[0] < self.opt.num_grasps_per_object:
+            sampled_grasp_idxs = range(len(pos_grasps))
+            sampled_grasp_idxs = np.append(sampled_grasp_idxs, np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object - len(pos_grasps), replace=True))
+        else:
+            sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object, replace=False)
 
         #* sample whole point cloud from mesh model
         # load trimesh object
@@ -794,8 +798,11 @@ class BimanualGraspSamplingDataV3(BaseDataset):
         
         sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
                         dexterity_weight * dexterity
-                        
-        return grasps, sum_quality, object_model, os.path.join(root_folder, mesh_root, mesh_fname), mesh_scale
+        sum_quality_positive_idx = np.where(sum_quality.reshape(-1) > 0.92)[0]
+        pos_grasps = grasps[sum_quality_positive_idx]
+        pos_quality = sum_quality[sum_quality_positive_idx]
+        
+        return pos_grasps, pos_quality, object_model, os.path.join(root_folder, mesh_root, mesh_fname), mesh_scale
     
 class BimanualBlockGraspSamplingData(BaseDataset):
     def __init__(self, opt, is_train=True):
