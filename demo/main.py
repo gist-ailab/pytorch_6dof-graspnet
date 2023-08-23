@@ -63,6 +63,54 @@ def make_parser():
         "Set the batch size of the number of grasps we want to process and can fit into the GPU memory at each forward pass. The batch_size can be increased for a GPU with more memory."
     )
     parser.add_argument('--train_data', action='store_true')
+    parser.add_argument(
+        '--pointnet_radius',
+        help='Radius for ball query for PointNet++, just the first layer', #0.02, 0.04
+        type=float,
+        # default=0.02,
+        nargs='+')
+    parser.add_argument(
+        '--pointnet_nclusters',
+        help=
+        'Number of cluster centroids for PointNet++, just the first layer', #128, 32
+        type=int,
+        # default=128 32,
+        nargs='+')
+    parser.add_argument(
+            '--is_bimanual', 
+            type=bool,
+            default=False,
+        )
+    parser.add_argument(
+        '--is_bimanual_v2',
+        type=bool,
+        default=False,
+    )
+    parser.add_argument(
+        '--is_dgcnn',
+        type=bool,
+        default=False,
+    )
+    parser.add_argument(
+        '--is_bimanual_v3',
+        type=bool,
+        default=False,
+    )
+    parser.add_argument(
+        '--use_point_loss',
+        type=bool,
+        default=False,
+    )
+    parser.add_argument(
+        '--use_block',
+        type=bool,
+        default=False
+    )
+    parser.add_argument(
+        '--use_anchor',
+        type=bool,
+        default=False
+    )
     opts, _ = parser.parse_known_args()
     if opts.train_data:
         parser.add_argument('--dataset_root_folder',
@@ -136,6 +184,7 @@ def main(args):
         grasp_sampler_args.dataset_root_folder = args.dataset_root_folder
         grasp_sampler_args.num_grasps_per_object = 1
         grasp_sampler_args.num_objects_per_batch = 1
+        grasp_sampler_args.is_bimanual = False
         dataset = DataLoader(grasp_sampler_args)
         for i, data in enumerate(dataset):
             generated_grasps, generated_scores = estimator.generate_and_refine_grasps(

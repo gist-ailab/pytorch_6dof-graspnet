@@ -72,10 +72,10 @@ def init_net(net, init_type, init_gain, gpu_ids):
 def define_classifier(opt, gpu_ids, arch, init_type, init_gain, device):
     net = None
     if arch == 'vae':
-        if opt.use_block:
-            net = GraspSamplerVAEBlock(opt.model_scale, opt.pointnet_radius,
-                                        opt.pointnet_nclusters, opt.latent_size, device)
-        elif opt.use_anchor:
+        # if opt.use_block:
+        #     net = GraspSamplerVAEBlock(opt.model_scale, opt.pointnet_radius,
+        #                                 opt.pointnet_nclusters, opt.latent_size, device)
+        if opt.use_anchor:
             net = GraspSamplerVAEAnchor(opt.model_scale, opt.pointnet_radius,
                                         opt.pointnet_nclusters, opt.latent_size, device)
         else:
@@ -268,6 +268,8 @@ class GraspSamplerVAE(GraspSampler):
         elif self.is_bimanual_v3:
             self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
                                 latent_size+3, self.is_bimanual_v2, is_bimanual_v3=True)
+        else:
+            self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters, latent_size+3)
         
         self.create_bottleneck(model_scale * 1024, latent_size)
                 
@@ -310,6 +312,7 @@ class GraspSamplerVAE(GraspSampler):
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
         eps = torch.randn_like(std)
+
         return mu + eps * std
 
     def forward(self, pc, grasp=None, train=True):
@@ -331,7 +334,8 @@ class GraspSamplerVAE(GraspSampler):
         end = time()
         # print('encode time', end - start)
         mu, logvar = self.bottleneck(z)
-        z = self.reparameterize(mu, logvar) # (96, 5)
+
+        z = self.reparameterize(mu, logvar)
         if self.is_bimanual_v3:
             dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=True)
             return dir1, dir2, app1, app2, point1, point2, confidence, mu, logvar
@@ -848,13 +852,13 @@ def base_network(pointnet_radius, pointnet_nclusters, scale, in_features, is_dgc
 
     else:
         sa1_module = pointnet2.PointnetSAModule(
-            npoint=pointnet_nclusters[0],
-            radius=pointnet_radius[0],
+            npoint=128,
+            radius=0.02,
             nsample=64,
             mlp=[in_features, 64 * scale, 64 * scale, 128 * scale])
         sa2_module = pointnet2.PointnetSAModule(
-            npoint=pointnet_nclusters[1], #32
-            radius=pointnet_radius[1], #0.04
+            npoint=32, #32
+            radius=0.04, #0.04
             nsample=128,
             mlp=[128 * scale, 128 * scale, 128 * scale, 256 * scale])
 

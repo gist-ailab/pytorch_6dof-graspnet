@@ -666,8 +666,10 @@ class BimanualGraspSamplingDataV3(BaseDataset):
             
         if not self.is_train:
             files_proccessed = files_proccessed[100:120]
+            
         else:
-            files_proccessed = files_proccessed[:100]
+            files_proccessed = files_proccessed[:10]
+
 
         return files_proccessed
     
@@ -882,14 +884,16 @@ class BimanualBlockGraspSamplingData(BaseDataset):
         bbox_list = []
         
         for cell_center in cell_centers:
-            bbox = trimesh.creation.box(extents=(cell_bounds[1,:]-cell_bounds[0,:] + 2*0.1), transform=RigidTransform(np.eye(3), cell_center).matrix)
+            bbox = trimesh.creation.box(extents=(cell_bounds[1,:]-cell_bounds[0,:] ), transform=RigidTransform(np.eye(3), cell_center).matrix)
             submesh = object_model.slice_plane(bbox.facets_origin, -bbox.facets_normal)
+            if len(submesh.vertices) == 0:
+                continue
             bbox_list.append(bbox)
             submesh_list.append(submesh)
         trimesh.Scene(bbox_list).show(flags={'wireframe': True})
         trimesh.Scene(bbox_list+[object_model]).show(flags={'wireframe': True})
 
-        for i in range(len(cell_centers)):
+        for i in range(len(submesh_list)):
             trimesh.Scene([submesh_list[i]]).show()
         
         exit()
