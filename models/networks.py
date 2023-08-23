@@ -932,13 +932,13 @@ def base_network(pointnet_radius, pointnet_nclusters, scale, in_features, is_dgc
 
     else:
         sa1_module = pointnet2.PointnetSAModule(
-            npoint=128,
-            radius=0.02,
+            npoint=pointnet_nclusters[0],
+            radius=pointnet_radius[0],
             nsample=64,
             mlp=[in_features, 64 * scale, 64 * scale, 128 * scale])
         sa2_module = pointnet2.PointnetSAModule(
-            npoint=32, #32
-            radius=0.04, #0.04
+            npoint=pointnet_nclusters[1],
+            radius=pointnet_radius[1], #0.04
             nsample=128,
             mlp=[128 * scale, 128 * scale, 128 * scale, 256 * scale])
 

@@ -134,17 +134,17 @@ class BimanualGraspSamplingData(BaseDataset):
         else:
             sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
         # sampled_grasp_idxs = np.random.choice(range(len(pos_grasps)), self.opt.num_grasps_per_object)
-        tmp = copy.deepcopy(pos_qualities)
-        tmp = tmp.reshape(-1)
-        tmp = sorted(tmp, reverse=True)
-        pos_idx = len(tmp) // 10 * 4
-        pos_grasp_idx_list = np.where(np.isin(pos_qualities, tmp[:pos_idx]))[0]
-        if len(pos_grasp_idx_list) < self.opt.num_grasps_per_object:
-            sampled_grasp_idxs = pos_grasp_idx_list
-            while len(sampled_grasp_idxs) < self.opt.num_grasps_per_object:
-                sampled_grasp_idxs = np.append(sampled_grasp_idxs, np.random.choice(pos_grasp_idx_list, 1))
-        else:
-            sampled_grasp_idxs = np.random.choice(pos_grasp_idx_list, self.opt.num_grasps_per_object)
+        # tmp = copy.deepcopy(pos_qualities)
+        # tmp = tmp.reshape(-1)
+        # tmp = sorted(tmp, reverse=True)
+        # pos_idx = len(tmp) // 10 * 4
+        # pos_grasp_idx_list = np.where(np.isin(pos_qualities, tmp[:pos_idx]))[0]
+        # if len(pos_grasp_idx_list) < self.opt.num_grasps_per_object:
+        #     sampled_grasp_idxs = pos_grasp_idx_list
+        #     while len(sampled_grasp_idxs) < self.opt.num_grasps_per_object:
+        #         sampled_grasp_idxs = np.append(sampled_grasp_idxs, np.random.choice(pos_grasp_idx_list, 1))
+        # else:
+        #     sampled_grasp_idxs = np.random.choice(pos_grasp_idx_list, self.opt.num_grasps_per_object)
         
 
         # render the scene to get pc and camera pose using pyrender
@@ -168,12 +168,7 @@ class BimanualGraspSamplingData(BaseDataset):
             output_grasps.append(camera_pose.dot(selected_grasp)) #(64, 4, 4)
         
         gt_control_points = utils.transform_control_points_numpy(
-            np.array(output_grasps), self.opt.num_grasps_per_object, mode='rt', is_bimanual=self.opt.is_bimanual) #(64, 6, 4)
-
-        
-            
-        
-        
+            np.array(output_grasps), self.opt.num_grasps_per_object, mode='rt', is_bimanual=self.opt.is_bimanual) #(64, 6, 4)   
         
         meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
         meta['grasp_rt'] = np.array(output_grasps).reshape(

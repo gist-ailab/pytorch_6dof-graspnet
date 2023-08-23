@@ -265,6 +265,8 @@ class BaseOptions:
             name += "_scale_" + str(self.opt.model_scale) + "_npoints_" + str(
                 self.opt.pointnet_nclusters[0]) + "_radius_" + str(
                     self.opt.pointnet_radius[0]).split(".")[-1]
+            print(str(self.opt.pointnet_nclusters[0]))
+            exit()
             if self.opt.arch == "vae" or self.opt.arch == "gan":
                 name += "_latent_size_" + str(self.opt.latent_size)
             if self.opt.is_bimanual:
