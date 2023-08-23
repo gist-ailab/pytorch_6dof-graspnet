@@ -158,7 +158,8 @@ class GraspNetModel:
                     device=self.device,
                     is_bimanual_v2=self.opt.is_bimanual_v2,
                     point_loss=self.opt.use_point_loss,
-                    pred_middle_point=predicted_point)
+                    pred_middle_point=predicted_point,
+                    pc=self.pcs)
                  
             self.kl_loss = self.opt.kl_loss_weight * self.criterion[0](
                     mu, logvar, device=self.device)

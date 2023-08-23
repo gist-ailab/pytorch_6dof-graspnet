@@ -137,14 +137,14 @@ class BaseOptions:
             '--pointnet_radius',
             help='Radius for ball query for PointNet++, just the first layer', #0.02, 0.04
             type=float,
-            # default=0.02,
+            default=0.02,
             nargs='+')
         self.parser.add_argument(
             '--pointnet_nclusters',
             help=
             'Number of cluster centroids for PointNet++, just the first layer', #128, 32
             type=int,
-            # default=128,
+            default=128,
             nargs='+')
         self.parser.add_argument(
             '--init_type',
@@ -262,10 +262,9 @@ class BaseOptions:
             name = self.opt.arch
             name += "_lr_" + str(self.opt.lr).split(".")[-1] + "_bs_" + str(
                 self.opt.batch_size)
-            name += "_scale_" + str(self.opt.model_scale)
-            # "_npoints_" + str(
-            #     self.opt.pointnet_nclusters) + "_radius_" + str(
-            #         self.opt.pointnet_radius).split(".")[-1]
+            name += "_scale_" + str(self.opt.model_scale) + "_npoints_" + str(
+                self.opt.pointnet_nclusters[0]) + "_radius_" + str(
+                    self.opt.pointnet_radius[0]).split(".")[-1]
             if self.opt.arch == "vae" or self.opt.arch == "gan":
                 name += "_latent_size_" + str(self.opt.latent_size)
             if self.opt.is_bimanual:

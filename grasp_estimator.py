@@ -40,9 +40,20 @@ class GraspEstimator:
             "better_than_threshold_in_sequence":
             utils.choose_grasps_better_than_threshold_in_sequence,
         }
+        
+        self.grasp_evaluator_opt.use_anchor = False
+        self.grasp_evaluator_opt.is_bimanual_v2 = False
+        self.grasp_evaluator_opt.is_bimanual_v3 = False
+        self.grasp_evaluator_opt.is_dgcnn = False
+        
+        self.grasp_sampler_opt.use_anchor = False
+        self.grasp_sampler_opt.is_bimanual_v2 = False
+        self.grasp_sampler_opt.is_bimanual_v3 = False
+        self.grasp_sampler_opt.is_dgcnn = False
+        
         self.device = torch.device("cuda:0")
-        self.grasp_evaluator = create_model(grasp_evaluator_opt)
-        self.grasp_sampler = create_model(grasp_sampler_opt)
+        self.grasp_evaluator = create_model(self.grasp_evaluator_opt)
+        self.grasp_sampler = create_model(self.grasp_sampler_opt)
 
     def keep_inliers(self, grasps, confidences, z, pc, inlier_indices_list):
         for i, inlier_indices in enumerate(inlier_indices_list):

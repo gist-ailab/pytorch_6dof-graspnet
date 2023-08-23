@@ -1,7 +1,7 @@
 import torch
 import numpy as np
-
-
+import open3d as o3d
+import mayavi.mlab as mlab
 def control_point_l1_loss_better_than_threshold(pred_control_points,
                                                 gt_control_points,
                                                 confidence,
@@ -46,7 +46,8 @@ def control_point_l1_loss(pred_control_points,
                           is_bimanual_v2=False,
                           point_loss=False,
                           pred_middle_point=None,
-                          use_anchor=False):
+                          use_anchor=False,
+                          pc=None):
     """
       Computes the l1 loss between the predicted control points and the
       groundtruth control points on the gripper.
@@ -60,8 +61,77 @@ def control_point_l1_loss(pred_control_points,
     else:
         if point_loss:
             assert pred_middle_point is not None
+            #* vis pred control point and gt control point
+            # mlab.figure(bgcolor=(1,1,1))
+            # pc = pc.detach().cpu()
+            # pc = pc.numpy()
+            # pc = pc[0]
+            # mlab.points3d(pc[:, 0], pc[:, 1], pc[:, 2], color=(0.1,0.1,1), scale_factor=0.01)
+            # for i in range(pred_control_points.shape[1]):
+            #     pred_grasp_pc1 = pred_control_points[0,i].detach().cpu().numpy()
+            #     mid_point1 = 0.5*(pred_grasp_pc1[2, :] + pred_grasp_pc1[3, :])
+            #     modified_pred_grasp1= []
+            #     modified_pred_grasp1.append(pred_grasp_pc1[0])
+            #     modified_pred_grasp1.append(mid_point1)
+            #     modified_pred_grasp1.append(pred_grasp_pc1[2])
+            #     modified_pred_grasp1.append(pred_grasp_pc1[4])
+            #     modified_pred_grasp1.append(pred_grasp_pc1[2])
+            #     modified_pred_grasp1.append(pred_grasp_pc1[3])
+            #     modified_pred_grasp1.append(pred_grasp_pc1[5])
+            #     pred_grasp_pc1 = np.asarray(modified_pred_grasp1)
+                
+            #     pred_grasp_pc2 = pred_control_points[1,i].detach().cpu().numpy()
+            #     mid_point2 = 0.5*(pred_grasp_pc2[2, :] + pred_grasp_pc2[3, :])
+            #     modified_pred_grasp2 = []
+            #     modified_pred_grasp2.append(pred_grasp_pc2[0])
+            #     modified_pred_grasp2.append(mid_point2)
+            #     modified_pred_grasp2.append(pred_grasp_pc2[2])
+            #     modified_pred_grasp2.append(pred_grasp_pc2[4])
+            #     modified_pred_grasp2.append(pred_grasp_pc2[2])
+            #     modified_pred_grasp2.append(pred_grasp_pc2[3])
+            #     modified_pred_grasp2.append(pred_grasp_pc2[5])
+            #     pred_grasp_pc2 = np.asarray(modified_pred_grasp2)
+                
+            #     # same way with pred grasp
+            #     gt_grasp_pc1 = gt_control_points[0,i].detach().cpu().numpy()
+            #     mid_point1 = 0.5*(gt_grasp_pc1[2, :] + gt_grasp_pc1[3, :])
+            #     modified_gt_grasp1= []
+            #     modified_gt_grasp1.append(gt_grasp_pc1[0])
+            #     modified_gt_grasp1.append(mid_point1)
+            #     modified_gt_grasp1.append(gt_grasp_pc1[2])
+            #     modified_gt_grasp1.append(gt_grasp_pc1[4])
+            #     modified_gt_grasp1.append(gt_grasp_pc1[2])
+            #     modified_gt_grasp1.append(gt_grasp_pc1[3])
+            #     modified_gt_grasp1.append(gt_grasp_pc1[5])
+            #     gt_grasp_pc1 = np.asarray(modified_gt_grasp1)
+                
+            #     gt_grasp_pc2 = gt_control_points[1,i].detach().cpu().numpy()
+            #     mid_point2 = 0.5*(gt_grasp_pc2[2, :] + gt_grasp_pc2[3, :])
+            #     modified_gt_grasp2 = []
+            #     modified_gt_grasp2.append(gt_grasp_pc2[0])
+            #     modified_gt_grasp2.append(mid_point2)
+            #     modified_gt_grasp2.append(gt_grasp_pc2[2])
+            #     modified_gt_grasp2.append(gt_grasp_pc2[4])
+            #     modified_gt_grasp2.append(gt_grasp_pc2[2])
+            #     modified_gt_grasp2.append(gt_grasp_pc2[3])
+            #     modified_gt_grasp2.append(gt_grasp_pc2[5])
+            #     gt_grasp_pc2 = np.asarray(modified_gt_grasp2)
+                
+                
+            #     mlab.plot3d(pred_grasp_pc1[:, 0], pred_grasp_pc1[:, 1], pred_grasp_pc1[:, 2], color=(1,0,0), tube_radius=0.003, opacity=1)
+            #     mlab.plot3d(pred_grasp_pc2[:, 0], pred_grasp_pc2[:, 1], pred_grasp_pc2[:, 2], color=(1,0,0), tube_radius=0.003, opacity=1)
+            #     mlab.plot3d(gt_grasp_pc1[:, 0], gt_grasp_pc1[:, 1], gt_grasp_pc1[:, 2], color=(0,1,0), tube_radius=0.003, opacity=1)
+            #     mlab.plot3d(gt_grasp_pc2[:, 0], gt_grasp_pc2[:, 1], gt_grasp_pc2[:, 2], color=(0,1,0), tube_radius=0.003, opacity=1)
+                
+            # mlab.show()
+            # exit()
+                
+                
+            
+            
             error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1)
             error2 = torch.sum(torch.abs(pred_control_points[1] - gt_control_points[1]), -1)
+            
             
             gt_middle_point1 = (gt_control_points[0,:,4] + gt_control_points[0,:,5]) / 2
             gt_middle_point2 = (gt_control_points[1,:,4] + gt_control_points[1,:,5]) / 2
