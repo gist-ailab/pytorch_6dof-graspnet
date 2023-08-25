@@ -81,7 +81,8 @@ def define_classifier(opt, gpu_ids, arch, init_type, init_gain, device):
         else:
             net = GraspSamplerVAE(opt.model_scale, opt.pointnet_radius,
                                 opt.pointnet_nclusters, opt.latent_size, device, 
-                                opt.is_bimanual_v2, opt.is_dgcnn, opt.is_bimanual_v3, use_test_reparam=opt.use_test_reparam)
+                                opt.is_bimanual_v2, opt.is_dgcnn, opt.is_bimanual_v3, use_test_reparam=opt.use_test_reparam,
+                                is_bimanual=opt.is_bimanual, second_grasp_sample=opt.second_grasp_sample)
     elif arch == 'gan':
         net = GraspSamplerGAN(opt.model_scale, opt.pointnet_radius,
                               opt.pointnet_nclusters, opt.latent_size, device, opt.is_bimanual_v2, opt.is_bimanual_v3)
@@ -118,7 +119,8 @@ class GraspSampler(nn.Module):
         self.device = device
 
     def create_decoder(self, model_scale, pointnet_radius, pointnet_nclusters,
-                       num_input_features, is_bimanual_v2=False, is_dgcnn=False, is_bimanual_v3=False):
+                       num_input_features, is_bimanual_v2=False, is_dgcnn=False, is_bimanual_v3=False,
+                       is_bimanual=False):
         # The number of input features for the decoder is 3+latent space where 3
         # represents the x, y, z position of the point-cloud
         if not is_bimanual_v2:
@@ -128,6 +130,26 @@ class GraspSampler(nn.Module):
                 self.q = nn.Linear(model_scale * 1024, 4)
                 self.t = nn.Linear(model_scale * 1024, 3)
                 self.confidence = nn.Linear(model_scale * 1024, 1)
+            elif is_bimanual:
+                self.decoder =base_network(pointnet_radius, pointnet_nclusters,
+                                            model_scale, num_input_features)
+                self.dir1_layer = nn.Sequential(nn.Conv1d(512, 256, 1), 
+                                                nn.BatchNorm1d(256), nn.ReLU(True),
+                                                nn.Conv1d(256, 128, 1),
+                                                nn.BatchNorm1d(128), nn.ReLU(True),
+                                                nn.Conv1d(128, 3, 1))
+                self.app1_layer = nn.Sequential(nn.Conv1d(512, 256, 1), 
+                                                nn.BatchNorm1d(256), nn.ReLU(True),
+                                                nn.Conv1d(256, 128, 1),
+                                                nn.BatchNorm1d(128), nn.ReLU(True),
+                                                nn.Conv1d(128, 3, 1))
+                self.point1_layer = nn.Sequential(nn.Conv1d(512, 256, 1), 
+                                                nn.BatchNorm1d(256), nn.ReLU(True),
+                                                nn.Conv1d(256, 128, 1),
+                                                nn.BatchNorm1d(128), nn.ReLU(True),
+                                                nn.Conv1d(128, 3, 1))
+                self.confidence = nn.Linear(512, 1)
+                
             else:
                 self.decoder = base_network(pointnet_radius, pointnet_nclusters,
                                             model_scale, num_input_features)
@@ -187,13 +209,28 @@ class GraspSampler(nn.Module):
                 self.t2 = nn.Linear(model_scale * 1024, 3)
                 self.confidence = nn.Linear(model_scale * 1024, 1)
             
-    def decode(self, xyz, z, is_bimanual_v2=False, is_dgcnn=False, is_bimanual_v3=False):
+    def decode(self, xyz, z, is_bimanual_v2=False, is_dgcnn=False, is_bimanual_v3=False, is_bimanual=False, second_grasp_sample=False, first_grasp=None):
         if not is_bimanual_v2:
             if is_dgcnn:
                 xyz_features = z.unsqueeze(1).expand(-1, xyz.shape[1], -1)
                 xyz_features = torch.transpose(xyz_features, 1, 2).contiguous()
                 xyz_features = self.decoder[0](xyz, xyz_features)
                 x = self.decoder[1](xyz_features.squeeze(-1))
+            elif is_bimanual:
+                if second_grasp_sample:
+                    xyz_features = self.concatenate_z_with_pc(xyz,z)
+                    xyz_features = torch.cat((xyz_features, first_grasp.unsqueeze(1).expand(-1, xyz.shape[1], -1)), -1).transpose(-1,1).contiguous()
+                else:
+                    xyz_features = self.concatenate_z_with_pc(xyz,z).transpose(-1,1).contiguous()
+
+                for module in self.decoder[0]:
+                    xyz, xyz_features = module(xyz, xyz_features)
+                predicted_dir1 = F.normalize(self.dir1_layer(xyz_features),p=2,dim=1).squeeze(-1)
+                predicted_app1 = F.normalize(self.app1_layer(xyz_features),p=2,dim=1).squeeze(-1)
+                predicted_point1 = self.point1_layer(xyz_features).squeeze(-1)
+                predicted_confidence = torch.sigmoid(self.confidence(xyz_features.squeeze(-1))).squeeze()
+                return predicted_dir1, predicted_app1, predicted_point1, predicted_confidence
+                
             else:
                 xyz_features = self.concatenate_z_with_pc(xyz,z).transpose(-1,1).contiguous()
                 for module in self.decoder[0]:
@@ -254,7 +291,9 @@ class GraspSamplerVAE(GraspSampler):
                  is_bimanual_v2=False,
                  is_dgcnn=False,
                  is_bimanual_v3=False,
-                 use_test_reparam=False):
+                 use_test_reparam=False,
+                 is_bimanual=False,
+                 second_grasp_sample=False):
         super(GraspSamplerVAE, self).__init__(latent_size, device)
         self.device = device
 
@@ -262,6 +301,9 @@ class GraspSamplerVAE(GraspSampler):
         self.is_bimanual_v3 = is_bimanual_v3
         self.is_dgcnn = is_dgcnn
         self.use_test_reparam = use_test_reparam
+        self.is_bimanual = is_bimanual
+        self.second_grasp_sample = second_grasp_sample
+        
         self.create_encoder(model_scale, pointnet_radius, pointnet_nclusters, self.is_dgcnn)
 
         if self.is_dgcnn:
@@ -273,8 +315,10 @@ class GraspSamplerVAE(GraspSampler):
         elif self.is_bimanual_v3:
             self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
                                 latent_size+3, self.is_bimanual_v2, is_bimanual_v3=True)
+        elif self.second_grasp_sample:
+            self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,latent_size+19, is_bimanual=self.is_bimanual)
         else:
-            self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters, latent_size+3)
+            self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters, latent_size+3, is_bimanual=self.is_bimanual)
         
         self.create_bottleneck(model_scale * 1024, latent_size)
                 
@@ -287,13 +331,13 @@ class GraspSamplerVAE(GraspSampler):
         # The number of input features for the encoder is 19: the x, y, z
         # position of the point-cloud and the flattened 4x4=16 grasp pose matrix
         if self.is_bimanual_v2:
-            self.encoder = base_network(pointnet_radius, pointnet_nclusters, 
-                                        model_scale, 35)
+            self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 35)
         elif self.is_dgcnn:
             self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 16, is_dgcnn=True, device=self.device)
+        elif self.second_grasp_sample:
+            self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 35)
         else:
-            self.encoder = base_network(pointnet_radius, pointnet_nclusters,
-                                        model_scale, 19)
+            self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 19)
 
     def create_bottleneck(self, input_size, latent_size):
         mu = nn.Linear(input_size, latent_size)
@@ -305,14 +349,10 @@ class GraspSamplerVAE(GraspSampler):
             xyz_features = self.encoder[0](xyz, xyz_features)
             return self.encoder[1](xyz_features.squeeze(-1))
         else:
-            
-
             for module in self.encoder[0]:
                 # print()
                 # print(xyz.type(), xyz_features.type())
                 xyz, xyz_features = module(xyz, xyz_features)
-
-
             return self.encoder[1](xyz_features.squeeze(-1))
 
     def bottleneck(self, z):
@@ -348,6 +388,13 @@ class GraspSamplerVAE(GraspSampler):
         if self.is_bimanual_v3:
             dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=True)
             return dir1, dir2, app1, app2, point1, point2, confidence, mu, logvar
+        elif self.is_bimanual and not self.second_grasp_sample:
+            dir1, app1, point1, confidence = self.decode(pc, z, is_bimanual=self.is_bimanual)
+            return dir1, app1, point1, confidence, mu, logvar
+        elif self.second_grasp_sample:
+            first_grasp = grasp[:, :16]
+            dir2, app2, point2, confidence = self.decode(pc, z, is_bimanual=self.is_bimanual, second_grasp_sample=self.second_grasp_sample, first_grasp=first_grasp)
+            return dir2, app2, point2, confidence, mu, logvar
         else:
             qt, confidence = self.decode(pc, z, self.is_bimanual_v2, self.is_dgcnn)
             return qt, confidence, mu, logvar
@@ -372,6 +419,13 @@ class GraspSamplerVAE(GraspSampler):
         if self.is_bimanual_v3:
             dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, mu, self.is_bimanual_v2, is_bimanual_v3=True)
             return dir1, dir2, app1, app2, point1, point2, confidence
+        elif self.is_bimanual and not self.second_grasp_sample:
+            dir1, app1, point1, confidence = self.decode(pc, mu, is_bimanual=self.is_bimanual)
+            return dir1, app1, point1, confidence
+        elif self.second_grasp_sample:
+            first_grasp = grasp[:, :16]
+            dir2, app2, point2, confidence = self.decode(pc, mu, is_bimanual=self.is_bimanual, second_grasp_sample=self.second_grasp_sample, first_grasp=first_grasp)
+            return dir2, app2, point2, confidence
         else:
             qt, confidence = self.decode(pc, mu, self.is_bimanual_v2, self.is_dgcnn)
             return qt, confidence
