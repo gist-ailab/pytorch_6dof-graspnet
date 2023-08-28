@@ -1043,38 +1043,15 @@ class BimanualBlockGraspSamplingData(BaseDataset):
     def make_dataset(self):
         files = []
         file_list = os.listdir(os.path.join(self.opt.dataset_root_folder,
-                               'grasps'))
-        files = [os.path.join(self.opt.dataset_root_folder, 'grasps', file) for file in file_list]
-        files_proccessed = []
-        for file in files:
-            h5_file = h5py.File(file, 'r')
-            force_closure = np.array(h5_file["/grasps/qualities/Force_closure"])
-            torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
-            dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
-            
-            force_closure_weight = 0.4
-            dexterity_weight = 0.5
-            torque_optimization_weight = 0.1
-            
-            
-            sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
-                            dexterity_weight * dexterity
-
-            sum_quality = sum_quality.reshape(-1)
-            sum_quality_idx = np.where(sum_quality.reshape(-1) > 0.85)[0]
-
-            if len(sum_quality_idx) == 0:
-                print('no grasp quality is over 0.85')
-                continue
-            
-            files_proccessed.append(file)  
-            
+                               'grasps_processed'))
+        files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
+        
         if not self.is_train:
-            files_proccessed = files_proccessed[100:120]
+            files = files[100:120]
         else:
-            files_proccessed = files_proccessed[:100]
+            files = files[:100] #3315
 
-        return files_proccessed
+        return files
     
     def __getitem__(self, index):
         path = self.paths[index]
@@ -1109,98 +1086,113 @@ class BimanualBlockGraspSamplingData(BaseDataset):
                     cell_centers.append([x, y, z])
         submesh_list = []
         bbox_list = []
+        pointcloud_idxs = {}
+        block_sampled_grasp_points = {}
+        block_sampled_grasps = {}
+        output_grasps = {}
+        output_grasps_points = {}
+        block_features = {}
         
-        for cell_center in cell_centers:
+        for i, cell_center in enumerate(cell_centers):
             bbox = trimesh.creation.box(extents=(cell_bounds[1,:]-cell_bounds[0,:] ), transform=RigidTransform(np.eye(3), cell_center).matrix)
-            submesh = object_model.slice_plane(bbox.facets_origin, -bbox.facets_normal)
-            if len(submesh.vertices) == 0:
+            #check which point in bbox and get index
+            idxs = bbox.contains(pc)
+            inlier_pc_idxs = np.where(idxs==True)[0]
+            # print(inlier_pc_idxs)
+            if len(inlier_pc_idxs) == 0:
                 continue
-            bbox_list.append(bbox)
-            submesh_list.append(submesh)
-        trimesh.Scene(bbox_list).show(flags={'wireframe': True})
-        trimesh.Scene(bbox_list+[object_model]).show(flags={'wireframe': True})
+            # print(idxs)
+            pointcloud_idxs[i] = inlier_pc_idxs
 
-        for i in range(len(submesh_list)):
-            trimesh.Scene([submesh_list[i]]).show()
+            # min_xyz = bbox.bounds[0,:]
+            # max_xyz = bbox.bounds[1,:]
+            # bbox_minmax[i] = np.array([min_xyz, max_xyz])
+            
+            # submesh = object_model.slice_plane(bbox.facets_origin, -bbox.facets_normal)
+            # if len(submesh.vertices) == 0:
+            #     continue
+            # bbox_list.append(bbox)
+            # submesh_list.append(submesh)
         
-        exit()
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(pc)
-        pcd.paint_uniform_color([0, 0, 0])
-        r = 0.1
-        center = [0, 0, 0]
-        bbox = o3d.geometry.AxisAlignedBoundingBox(
-            min_bound=[center[0] - r, center[1] - r, center[2] - r],
-            max_bound=[center[0] + r, center[1] + r, center[2] + r]
-        )
-        cropped_pcd = pcd.crop(bbox)
-        cropped_pcd.paint_uniform_color([1, 0, 0])
-        # o3d.visualization.draw_geometries([pcd])
-        o3d.visualization.draw_geometries([pcd, cropped_pcd])
-        exit()
+        # trimesh.Scene(bbox_list).show(flags={'wireframe': True})
+        # trimesh.Scene(bbox_list+[object_model]).show(flags={'wireframe': True})
+        # for i in range(len(submesh_list)):
+        #     trimesh.Scene([submesh_list[i]]).show()
         
-        output_grasps1 = pos_grasps[:, 0, :, :]
-        # output_grasps2 = pos_grasps[:, 1, :, :]
-        # output_grasps1 = output_grasps1[:, 3, :3]
-        # output_grasps1[:, :3, 3] = output_grasps1[:, :3, 3] - object_mesh_mean
-        # output_grasps2[:, :3, 3] = output_grasps2[:, :3, 3] - object_mesh_mean
+        # print(bbox_minmax)
+        # print(bbox_minmax[0])
+        # print(bbox_minmax[0][0])
         
-        gt_control_points1 = utils.transform_control_points_numpy(
-            np.array(output_grasps1), len(output_grasps1), mode='rt', is_bimanual_v2=True)
-        # gt_control_points2 = utils.transform_control_points_numpy(
-        #     np.array(output_grasps2), len(output_grasps2), mode='rt', is_bimanual_v2=True)
-        
-        #* get anchor point using only the first grasp
+        #* sample grasp for each bbox cell
+        gt_control_points = utils.transform_control_points_numpy(
+            np.array(pos_grasps), len(pos_grasps), mode='rt', is_bimanual=True)
+        gt_grasp_points = 0.5*(gt_control_points[:, 2, :3] + gt_control_points[:, 3, :3]) #(num_gt_grasps, 3)
+        # check if the grasp point is near the each cell's object point cloud
+        # if grasp point is near the each cell's object point cloud, allocate grasp point to each cell
+        pointcloud_idxs_keys = pointcloud_idxs.keys()
+        remove_keys = []
+        for key in pointcloud_idxs_keys:
+            block_sampled_pc = pc[pointcloud_idxs[key]]
+            dist_grasp_pc = np.expand_dims(gt_grasp_points, axis=1) - np.expand_dims(block_sampled_pc, axis=0)
+            dist_grasp_pc = np.linalg.norm(dist_grasp_pc, axis=2)
 
-        anchor = gt_control_points1[:,0,:3]
-        # compute point cloud close to anchor point less than threshold
-        # dist = np.expand_dims(anchor, axis=2) - np.expand_dims(pc, axis=2)
-        # print(np.expand_dims(np.expand_dims(anchor, axis=1), axis=2).shape)
-        # print(np.expand_dims(np.expand_dims(pc, axis=0), axis=0).shape)
-        dist = np.expand_dims(np.expand_dims(anchor, axis=1), axis=2) -\
-            np.expand_dims(np.expand_dims(pc, axis=0), axis=0)
-        dist = np.squeeze(dist)
-        dist = np.linalg.norm(dist, axis=2)
-        partial_pc = []
-        for i in range(len(dist)):
-            close_pc_idx = np.where(dist[i]<0.3)[0]
-            if len(close_pc_idx) > 256:
-                pc_sample_idx = np.random.choice(range(len(close_pc_idx)), 256, replace=False)
-                close_pc_idx = pc_sample_idx
+            min_dist_grasp_pc = np.min(dist_grasp_pc, axis=1)
+            block_sampled_grasp_idx = np.where(min_dist_grasp_pc <= 0.0675)[0]
+            # print(block_sampled_grasp_idx)
+            if len(block_sampled_grasp_idx) == 0:
+                # pointcloud_idxs.pop(key)
+                remove_keys.append(key)
+                # print('no grasp near the block sampled point cloud')
+                continue
+            
+            block_sampled_grasp_points[key] = gt_control_points[block_sampled_grasp_idx][:, :, :3]
+            block_sampled_grasps[key] = pos_grasps[block_sampled_grasp_idx]
+        
+        #* remove keys from pointcloud_idxs in remove_keys list
+        list(map(pointcloud_idxs.pop, remove_keys))
+
+        #* visualize
+        # for key in pointcloud_idxs.keys():
+        #     pcd = o3d.geometry.PointCloud()
+        #     pcd.points = o3d.utility.Vector3dVector(pc)
+        #     pcd.paint_uniform_color([0, 0, 0])
+            
+        #     block_sampled_pcd = o3d.geometry.PointCloud()
+        #     block_sampled_pcd.points = o3d.utility.Vector3dVector(pc[pointcloud_idxs[key]])
+        #     block_sampled_pcd.paint_uniform_color([0, 1, 0])
+            
+        #     block_sampled_grasp_point_pcd = o3d.geometry.PointCloud()
+        #     block_sampled_grasp_point_pcd.points = o3d.utility.Vector3dVector(block_sampled_grasp_points[key].reshape(-1, 3))
+        #     block_sampled_grasp_point_pcd.paint_uniform_color([1, 0, 0])
+        #     o3d.visualization.draw_geometries([pcd, block_sampled_pcd, block_sampled_grasp_point_pcd])
+        
+        #* sample grsap and grasp control point for each cell
+        output_grasps = []
+        output_grasps_points = []
+        block_features = []
+        for key in pointcloud_idxs.keys():
+            if len(block_sampled_grasps[key]) > self.opt.num_grasps_per_object:
+                sampled_grasp_idxs = np.random.choice(range(len(block_sampled_grasps[key])), self.opt.num_grasps_per_object, replace=False)
             else:
-                # print('not enough close points')
-                pc_sample_idx = range(len(close_pc_idx))
-                while len(pc_sample_idx) > 256:
-                    pc_sample_idx = np.append(pc_sample_idx, np.random.choice(range(len(close_pc_idx)), 256-len(pc_sample_idx), replace=False))    
-            partial_pc.append(pc[close_pc_idx])
-        partial_pc = np.asarray(partial_pc) #(2001, 256, 3)
-        
-        # for i in range(len(dist)):
-        #     close_pc_idx = np.where(dist[i]<0.3)
-        #     partial_pc = pc[close_pc_idx]
-        #     pcd_pc = o3d.geometry.PointCloud()
-        #     pcd_pc.points = o3d.utility.Vector3dVector(pc)
-        #     pcd_pc.paint_uniform_color([0, 0, 0])
-        #     pcd_partial_pc = o3d.geometry.PointCloud()
-        #     pcd_partial_pc.points = o3d.utility.Vector3dVector(partial_pc)
-        #     pcd_partial_pc.paint_uniform_color([0, 1, 0])
-        #     pcd_anchor = o3d.geometry.PointCloud()
-        #     pcd_anchor.points = o3d.utility.Vector3dVector(anchor[i].reshape(1,3))
-        #     pcd_anchor.paint_uniform_color([1, 0, 0])
-        #     o3d.visualization.draw_geometries([pcd_pc, pcd_partial_pc, pcd_anchor])
-        
-        
-        output_grasps1 = output_grasps1[sampled_grasp_idxs]
-        # output_grasps2 = output_grasps2[sampled_grasp_idxs]
-        gt_control_points1 = gt_control_points1[sampled_grasp_idxs]
-        # gt_control_points2 = gt_control_points2[sampled_grasp_idxs]
-        output_qualities = pos_qualities[sampled_grasp_idxs]
-        partial_pc = partial_pc[sampled_grasp_idxs]
+                sampled_grasp_idxs = range(len(block_sampled_grasps[key]))
+                while len(sampled_grasp_idxs) < self.opt.num_grasps_per_object:
+                    sampled_grasp_idxs = np.append(sampled_grasp_idxs, np.random.choice(range(len(block_sampled_grasps[key])), self.opt.num_grasps_per_object-len(sampled_grasp_idxs), replace=True))
+            features = self.create_block_sampled_features(self.opt.num_grasps_per_object, self.opt.npoints, pointcloud_idxs[key])
+
+            # output_grasps[key] = block_sampled_grasps[key][sampled_grasp_idxs]
+            # output_grasps_points[key] = block_sampled_grasp_points[key][sampled_grasp_idxs]
+            
+            output_grasps.append(block_sampled_grasps[key][sampled_grasp_idxs])
+            output_grasps_points.append(block_sampled_grasp_points[key][sampled_grasp_idxs])
+            block_features.append(features)
+        output_grasps = np.array(output_grasps)
+        output_grasps_points = np.array(output_grasps_points)
+        block_features = np.array(block_features)
+
         
         meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
-        meta['partial_pc'] = partial_pc
-        meta['grasp_rt1'] = np.array(output_grasps1).reshape(
-            len(output_grasps1), -1)
+        meta['features'] = block_features
+        meta['grasp_rt'] = output_grasps.reshape(output_grasps.shape[0], output_grasps.shape[1], -1)
         # meta['grasp_rt2'] = np.array(output_grasps2).reshape(
         #     len(output_grasps2), -1)
         # meta['pc_pose'] = np.array([utils.inverse_transform(camera_pose)] *
@@ -1209,14 +1201,21 @@ class BimanualBlockGraspSamplingData(BaseDataset):
                                     self.opt.num_grasps_per_object)
         meta['cad_scale'] = np.array([cad_scale] *
                                      self.opt.num_grasps_per_object)
-        meta['quality'] = np.array(output_qualities)
-        meta['target_cps1'] = np.array(gt_control_points1[:, :, :3])
+        # meta['quality'] = np.array(output_qualities)
+        meta['target_cps'] = output_grasps_points
         # meta['target_cps2'] = np.array(gt_control_points2[:, :, :3])
         return meta
         
         
     def __len__(self):
         return self.size
+    
+    def create_block_sampled_features(self, batch_size, pc_npoints, block_sampled_pointcloud_idx):
+        features = np.zeros((batch_size, pc_npoints, 1))
+        # for i in range(batch_size):
+        features[:, block_sampled_pointcloud_idx, 0] = 1
+        return features
+    
     
     def read_grasp_file(self, path, return_all_grasps=False):
         file_name = path
@@ -1242,7 +1241,7 @@ class BimanualBlockGraspSamplingData(BaseDataset):
                                ratio_of_grasps_to_be_used=1, 
                                return_all_grasps=False):
         
-        num_clusters = 16
+        num_clusters = self.opt.num_grasp_clusters
         root_folder = self.opt.dataset_root_folder
         mesh_root = 'meshes'
         
@@ -1256,32 +1255,41 @@ class BimanualBlockGraspSamplingData(BaseDataset):
         mesh_scale = h5_file['object/scale'][()]
         # load and rescale, translate object mesh
         object_model = Object(os.path.join(root_folder, mesh_root, mesh_fname))
+        
         # object_model.rescale(mesh_scale)
         # object_model = object_model.mesh
         # object_mean = np.mean(object_model.vertices, 0, keepdims=1)
         # object_model.vertices -= object_mean
-        
+
         object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
         object_model.rescale(mesh_scale)
         object_mean = object_model.mesh.centroid
-        object_model = object_model.mesh 
+        object_model = object_model.mesh
+                
         # load bimanual grasp
-        grasps = np.asarray(h5_file['grasps/transforms'])
-        grasps[:, :, :3, 3] -= object_mean
+        # grasps = np.asarray(h5_file['grasps/transforms'])
+        # grasps[:, :, :3, 3] -= object_mean
         
         # scale each grasp quality and sum them up
-        force_closure = np.array(h5_file["/grasps/qualities/Force_closure"])
-        torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
-        dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
+        # force_closure = np.array(h5_file["grasps/qualities/Force_closure"])
+        # torque_optimization = np.array(h5_file["grasps/qualities/Torque_optimization"])
+        # dexterity = np.array(h5_file["grasps/qualities/Dexterity"])
         
-        force_closure_weight = 0.4
-        torque_optimization_weight = 0.1
-        dexterity_weight = 0.5
+        # force_closure_weight = 0.4
+        # torque_optimization_weight = 0.5
+        # dexterity_weight = 0.1
         
-        sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
-                        dexterity_weight * dexterity
-                        
-        return grasps, sum_quality, object_model, os.path.join(root_folder, mesh_root, mesh_fname), mesh_scale
+        # sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
+        #                 dexterity_weight * dexterity
+        
+        # filter bimanual grasp to unique single grasp and corresponding quality
+        # single_grasp, single_grasp_quality = self.filter_single_grasp(sum_quality, grasps)
+        single_grasp = np.array(h5_file["grasps/single_grasps"])
+
+        single_grasp[:, :3, 3] -= object_mean
+        single_grasp_quality = np.array(h5_file["grasps/single_grasps_quality"])
+
+        return single_grasp, single_grasp_quality, object_model, os.path.join(root_folder, mesh_root, mesh_fname), mesh_scale
     
 class BimanualAnchorGraspSamplingData(BaseDataset):
     def __init__(self, opt, is_train=True):

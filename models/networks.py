@@ -8,6 +8,7 @@ from models import losses
 from torch.nn import Sequential as Seq, Linear as Lin, ReLU, BatchNorm1d as BN
 import pointnet2_ops.pointnet2_modules as pointnet2
 from time import time
+import copy
 
 def get_scheduler(optimizer, opt):
     if opt.lr_policy == 'lambda':
@@ -78,6 +79,8 @@ def define_classifier(opt, gpu_ids, arch, init_type, init_gain, device):
         if opt.use_anchor:
             net = GraspSamplerVAEAnchor(opt.model_scale, opt.pointnet_radius,
                                         opt.pointnet_nclusters, opt.latent_size, device)
+        elif opt.use_block:
+            net = GraspSamplerVAEBlock(opt.model_scale, opt.pointnet_radius, opt.pointnet_nclusters, opt.latent_size, device)
         else:
             net = GraspSamplerVAE(opt.model_scale, opt.pointnet_radius,
                                 opt.pointnet_nclusters, opt.latent_size, device, 
@@ -650,6 +653,7 @@ class GraspSamplerVAEBlock(GraspSampler):
 
         self.is_bimanual_v2 = is_bimanual_v2
         self.is_bimanual_v3 = is_bimanual_v3
+        self.npoints = 2048
         self.create_encoder(model_scale, pointnet_radius, pointnet_nclusters)
 
         
@@ -677,26 +681,40 @@ class GraspSamplerVAEBlock(GraspSampler):
         #     self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 16, is_dgcnn=True, device=self.device)
         else:
             self.encoder = base_network(pointnet_radius, pointnet_nclusters,
-                                        model_scale, 19)
+                                        model_scale, 20)
         
-        self.encoder = base_network(pointnet_radius, pointnet_nclusters,
-                                    model_scale, 16)
+        # self.encoder = base_network(pointnet_radius, pointnet_nclusters,
+        #                             model_scale, 16)
 
     def create_bottleneck(self, input_size, latent_size):
         mu = nn.Linear(input_size, latent_size)
         logvar = nn.Linear(input_size, latent_size)
         self.latent_space = nn.ModuleList([mu, logvar])
 
-    def encode(self, xyz, xyz_features):
-        if self.is_dgcnn:
-            xyz_features = self.encoder[0](xyz, xyz_features)
-            return self.encoder[1](xyz_features.squeeze(-1))
-        else:
+    def encode(self, xyz, grasp, xyz_features):
+        z_list = []
+        pc = xyz
+        features = xyz_features
+        for block_idx in range(grasp.shape[0]):
+            xyz = pc
+            xyz_features = features
+            
+            input_features = torch.cat((xyz, grasp[block_idx].unsqueeze(1).expand(-1, xyz.shape[1], -1)),-1)
+            xyz_features = torch.cat((input_features, xyz_features[block_idx]), -1)
+            xyz_features = xyz_features.transpose(-1, 1).contiguous()
+
             for module in self.encoder[0]:
                 # print()
                 # print(xyz.type(), xyz_features.type())
                 xyz, xyz_features = module(xyz, xyz_features)
-            return self.encoder[1](xyz_features.squeeze(-1))
+
+            z = self.encoder[1](xyz_features.squeeze(-1))
+            z_list.append(z)
+
+        z_list = torch.stack(z_list, dim=0)
+        print(z_list.shape)
+        exit()
+        return z_list
 
     def bottleneck(self, z):
         return self.latent_space[0](z), self.latent_space[1](z)
@@ -706,23 +724,20 @@ class GraspSamplerVAEBlock(GraspSampler):
         eps = torch.randn_like(std)
         return mu + eps * std
 
-    def forward(self, pc, grasp=None, train=True):
+    def forward(self, pc, grasp=None, train=True, features=None):
         if train:
-            return self.forward_train(pc, grasp)
+            return self.forward_train(pc, grasp, features=features)
         else:
-            return self.forward_test(pc, grasp)
+            return self.forward_test(pc, grasp, features=features)
 
-    def forward_train(self, pc, grasp):
-        if self.is_dgcnn:
-            input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
-            input_features = torch.transpose(input_features, 1, 2).contiguous() # (64, 16, 1024)
-        else:
-            input_features = torch.cat(
-                (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
-                -1).transpose(-1, 1).contiguous()
-        start = time()
-        z = self.encode(pc, input_features) #(64, 1024)
-        end = time()
+    def forward_train(self, pc, grasp, features=None):
+        # for block_idx in range(grasp.shape[0]):
+        #     input_features = torch.cat((pc, grasp[block_idx].unsqueeze(1).expand(-1, pc.shape[1], -1)),-1)
+        #     features = torch.cat((input_features, features[block_idx]), -1)
+        #     features = features.transpose(-1, 1).contiguous()
+            
+        z = self.encode(pc, grasp, features) #(64, 1024)
+
         # print('encode time', end - start)
         mu, logvar = self.bottleneck(z)
         z = self.reparameterize(mu, logvar) # (96, 5)

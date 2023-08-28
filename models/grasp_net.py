@@ -61,6 +61,20 @@ class GraspNetModel:
                 self.grasps = input_grasps.to(self.device).requires_grad_(
                     self.is_train)
                 self.targets = targets.to(self.device)
+            
+            elif self.opt.use_block:
+                input_pcs = torch.from_numpy(data['pc']).contiguous()
+                input_grasps = torch.from_numpy(data['grasp_rt']).float()
+                features = torch.from_numpy(data['features']).float()
+                if self.opt.arch == "evaluator":
+                    targets = torch.from_numpy(data['labels']).float()
+                else:
+                    targets = torch.from_numpy(data['target_cps']).float()
+                self.features = features.to(self.device).requires_grad_(self.is_train)
+                self.pcs = input_pcs.to(self.device).requires_grad_(self.is_train)
+                self.grasps = input_grasps.to(self.device).requires_grad_(self.is_train)
+                self.targets = targets.to(self.device)          
+            
             elif self.opt.second_grasp_sample:
                 input_pcs = torch.from_numpy(data['pc']).contiguous()
                 input_grasps = torch.from_numpy(data['grasp_rt']).float()
@@ -115,7 +129,7 @@ class GraspNetModel:
         return torch.sigmoid(success)
 
     def forward(self):
-        return self.net(self.pcs, self.grasps, train=self.is_train)
+        return self.net(self.pcs, self.grasps, train=self.is_train, features=self.features)
 
     def backward(self, out):
         if self.opt.arch == 'vae':
