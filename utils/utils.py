@@ -430,10 +430,7 @@ def transform_control_points_numpy(gt_grasps, batch_size, mode='qt', is_bimanual
             control_points_trans[:, :, 1] = control_points[:, :, 2]
             control_points = control_points_trans
 
-            
-        
         return np.matmul(control_points, np.transpose(gt_grasps, (0, 2, 1)))
-        # return np.matmul(control_points, gt_grasps)
 
 
 def quaternion_mult(q, r):

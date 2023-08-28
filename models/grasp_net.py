@@ -61,6 +61,21 @@ class GraspNetModel:
                 self.grasps = input_grasps.to(self.device).requires_grad_(
                     self.is_train)
                 self.targets = targets.to(self.device)
+            elif self.opt.second_grasp_sample:
+                input_pcs = torch.from_numpy(data['pc']).contiguous()
+                input_grasps = torch.from_numpy(data['grasp_rt']).float()
+                input_grasps_pair = torch.from_numpy(data['grasp_rt_paired']).float()
+                input_grasps = torch.cat([input_grasps, input_grasps_pair], dim=1)
+                if self.opt.arch == "evaluator":
+                    targets = torch.from_numpy(data['labels']).float()
+                else:
+                    targets = torch.from_numpy(data['target_cps']).float()
+                    targets_pair = torch.from_numpy(data['target_cps_paired']).float()
+                    targets = torch.cat([targets.unsqueeze(0), targets_pair.unsqueeze(0)], dim=0)
+                
+                self.pcs = input_pcs.to(self.device).requires_grad_(self.is_train)
+                self.grasps = input_grasps.to(self.device).requires_grad_(self.is_train)
+                self.targets = targets.to(self.device)
             else:
                 input_pcs = torch.from_numpy(data['pc']).contiguous()
                 input_grasps = torch.from_numpy(data['grasp_rt']).float()
@@ -70,8 +85,7 @@ class GraspNetModel:
                     targets = torch.from_numpy(data['target_cps']).float()
 
                 self.pcs = input_pcs.to(self.device).requires_grad_(self.is_train)
-                self.grasps = input_grasps.to(self.device).requires_grad_(
-                    self.is_train)
+                self.grasps = input_grasps.to(self.device).requires_grad_(self.is_train)
                 self.targets = targets.to(self.device)
         
         else:
@@ -115,6 +129,18 @@ class GraspNetModel:
                         confidence_weight=self.opt.confidence_weight,
                         device=self.device,
                         use_anchor=self.opt.use_anchor
+                    )
+                elif self.opt.is_bimanual:
+                    dir1, app1, point1, confidence, mu, logvar = out
+                    predicted_cp = utils.transform_control_points_v3(app1, dir1, point1, app1.shape[0], device=self.device)[:,:,:3]
+                    self.reconstruction_loss, self.confidence_loss = self.criterion[1](
+                        predicted_cp,
+                        self.targets,
+                        confidence=confidence,
+                        confidence_weight=self.opt.confidence_weight,
+                        device=self.device,
+                        point_loss=self.opt.use_point_loss,
+                        pred_middle_point=point1,
                     )
                 else:
                     predicted_cp, confidence, mu, logvar = out
@@ -271,6 +297,8 @@ class GraspNetModel:
             out = self.forward()
             if self.opt.is_bimanual_v3:
                 dir1, dir2, app1, app2, point1, point2, confidence = out
+            elif self.opt.is_bimanual:
+                dir1, app1, point1, confidence = out
             else:
                 prediction, confidence = out
             if vis:
@@ -290,6 +318,16 @@ class GraspNetModel:
                                 confidence_weight=self.opt.confidence_weight,
                                 device=self.device,
                                 use_anchor=self.opt.use_anchor)
+                        elif self.opt.is_bimanual:
+                            predicted_cp = utils.transform_control_points_v3(app1, dir1, point1, app1.shape[0], device=self.device)[:,:,:3]
+                            reconstruction_loss, _ = self.criterion[1](
+                                predicted_cp,
+                                self.targets,
+                                confidence=confidence,
+                                confidence_weight=self.opt.confidence_weight,
+                                point_loss=self.opt.use_point_loss,
+                                pred_middle_point=point1,
+                            )
                         else:
                             predicted_cp = utils.transform_control_points(
                                 prediction, prediction.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]

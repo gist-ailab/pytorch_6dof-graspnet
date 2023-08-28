@@ -62,12 +62,17 @@ def filter_single_grasp(sum_quality, grasps):
     first_grasp_candidate = np.unique(grasps[:, 0, :, :], axis=0)
     second_grasp_candidate = np.unique(grasps[:, 1, :, :], axis=0)
     total_grasp_candidate = np.concatenate((first_grasp_candidate, second_grasp_candidate), axis=0)
+    
     unique_single_grasp_candidate = np.unique(total_grasp_candidate, axis=0)
+    # print(grasps.shape)
+    # print(total_grasp_candidate.shape)
+    # print(unique_single_grasp_candidate.shape)
+    # exit()
     
     paired_first_grasp_quality = []
     paired_idx_mapping = {}
     for i in range(len(unique_single_grasp_candidate)):
-        first_grasp = total_grasp_candidate[i]
+        first_grasp = unique_single_grasp_candidate[i]
         paired_grasp_idxs = find_paired_grasp(first_grasp, grasps)
         total_quality = 0
         
@@ -83,6 +88,7 @@ def filter_single_grasp(sum_quality, grasps):
         total_quality /= len(paired_grasp_idxs)
         paired_first_grasp_quality.append(total_quality)
         paired_idx_mapping[i] = paired_idx_list
+
 
     paired_first_grasp_quality = np.array(paired_first_grasp_quality)
         
@@ -117,8 +123,8 @@ for file in tqdm(files):
     dexterity = np.array(grasp_file["grasps/qualities/Dexterity"])
     
     force_closure_weight = 0.4
-    torque_optimization_weight = 0.1
     dexterity_weight = 0.5
+    torque_optimization_weight = 0.1
     
     sum_quality = force_closure_weight * force_closure + torque_optimization_weight * torque_optimization + \
                     dexterity_weight * dexterity
@@ -126,21 +132,24 @@ for file in tqdm(files):
     
     # print(sum_quality.shape)
     sum_quality = sum_quality.reshape(-1)
-    sum_quality_idx = np.where(sum_quality.reshape(-1) > 0.85)[0]
-
+    sum_quality_idx = np.where(sum_quality.reshape(-1) > 0.92)[0]
+    # print(len(sum_quality_idx))
     if len(sum_quality_idx) == 0:
-        print('no grasp quality is over 0.85')
-        flag = flag + 1
-
-print(flag)
-    # single_grasp, single_grasp_quality, paired_idx_mapping = filter_single_grasp(sum_quality, grasps)
+        print('no grasp quality is over 0.92')
+        # flag = flag + 1
+        continue
+        
+    grasps = grasps[sum_quality_idx]
+    sum_quality = sum_quality[sum_quality_idx]
     
-    # file_name  = file.split('/')[-1]
-    # #copy file to processed folder
-    # shutil.copy(file, os.path.join(grasp_data_root_processed, file_name))
-    # # add new dataset in grasp group
-    # processed_file = h5py.File(os.path.join(grasp_data_root_processed, file_name), 'a')
-    # processed_file.create_dataset('grasps/single_grasps', data=single_grasp)
-    # processed_file.create_dataset('grasps/single_grasps_quality', data=single_grasp_quality)
-    # processed_file.create_dataset('grasps/paired_idx_mapping', data=str(paired_idx_mapping))
-    # processed_file.close()
+    single_grasp, single_grasp_quality, paired_idx_mapping = filter_single_grasp(sum_quality, grasps)
+    
+    file_name  = file.split('/')[-1]
+    #copy file to processed folder
+    shutil.copy(file, os.path.join(grasp_data_root_processed, file_name))
+    # add new dataset in grasp group
+    processed_file = h5py.File(os.path.join(grasp_data_root_processed, file_name), 'a')
+    processed_file.create_dataset('grasps/single_grasps', data=single_grasp)
+    processed_file.create_dataset('grasps/single_grasps_quality', data=single_grasp_quality)
+    processed_file.create_dataset('grasps/paired_idx_mapping', data=str(paired_idx_mapping))
+    processed_file.close()

@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import open3d as o3d
-import mayavi.mlab as mlab
+# import mayavi.mlab as mlab
 def control_point_l1_loss_better_than_threshold(pred_control_points,
                                                 gt_control_points,
                                                 confidence,
@@ -58,6 +58,11 @@ def control_point_l1_loss(pred_control_points,
 
         error = torch.sum(torch.abs(pred_control_points - gt_control_points), -1)
 
+        if point_loss:
+            gt_middle_point1 = (gt_control_points[:,4] + gt_control_points[:,5]) / 2
+            error_point1 = torch.sum(torch.abs(pred_middle_point - gt_middle_point1), -1)
+            error = torch.cat((error, error_point1.unsqueeze(-1)), -1)
+        
     else:
         if point_loss:
             assert pred_middle_point is not None
@@ -131,13 +136,10 @@ def control_point_l1_loss(pred_control_points,
             
             error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1)
             error2 = torch.sum(torch.abs(pred_control_points[1] - gt_control_points[1]), -1)
-            
-            
             gt_middle_point1 = (gt_control_points[0,:,4] + gt_control_points[0,:,5]) / 2
             gt_middle_point2 = (gt_control_points[1,:,4] + gt_control_points[1,:,5]) / 2
             error_point1 = torch.sum(torch.abs(pred_middle_point[0] - gt_middle_point1), -1)
             error_point2 = torch.sum(torch.abs(pred_middle_point[1] - gt_middle_point2), -1)
-
             error1 = torch.cat((error1, error_point1.unsqueeze(-1)), -1)
             error2 = torch.cat((error2, error_point2.unsqueeze(-1)), -1)
             
