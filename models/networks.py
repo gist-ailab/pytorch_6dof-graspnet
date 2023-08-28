@@ -437,6 +437,9 @@ class GraspSamplerVAE(GraspSampler):
     def generate_grasps(self, pc, z=None):
         if z is None:
             z = self.sample_latent(pc.shape[0])
+        if self.is_bimanual:
+            dir1, app1, point1, confidence = self.decode(pc, z, is_bimanual=self.is_bimanual)
+            return dir1, app1, point1, confidence, z.squeeze()
         if self.is_bimanual_v3:
             dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=True)
             return dir1, dir2, app1, app2, point1, point2, confidence, z.squeeze()

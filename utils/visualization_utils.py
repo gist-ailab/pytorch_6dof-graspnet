@@ -177,7 +177,6 @@ def draw_scene(pc,
             indexes = range(len(grasps))
 
     print('draw scene ', len(grasps))
-
     selected_grasps_so_far = []
     removed = 0
 

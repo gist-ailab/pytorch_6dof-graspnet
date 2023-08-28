@@ -227,6 +227,7 @@ class BimanualGraspSamplingData(BaseDataset):
         mesh_scale = h5_file['object/scale'][()]
         # load and rescale, translate object mesh
         object_model = Object(os.path.join(root_folder, mesh_root, mesh_fname))
+        
         # object_model.rescale(mesh_scale)
         # object_model = object_model.mesh
         # object_mean = np.mean(object_model.vertices, 0, keepdims=1)
@@ -235,7 +236,8 @@ class BimanualGraspSamplingData(BaseDataset):
         object_model.mesh.apply_transform(RigidTransform(np.eye(3), -object_model.mesh.centroid).matrix)
         object_model.rescale(mesh_scale)
         object_mean = object_model.mesh.centroid
-        object_model = object_model.mesh        
+        object_model = object_model.mesh
+                
         # load bimanual grasp
         # grasps = np.asarray(h5_file['grasps/transforms'])
         # grasps[:, :, :3, 3] -= object_mean
@@ -282,7 +284,6 @@ class BimanualGraspSamplingData(BaseDataset):
             
         return unique_single_grasp_candidate, paired_first_grasp_quality
             
-    
     
     def find_paired_grasp(self, first_grasp, bimanual_grasps):
         index_list = []

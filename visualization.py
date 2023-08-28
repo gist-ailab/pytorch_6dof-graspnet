@@ -70,7 +70,7 @@ def main(epoch=-1, name="", is_train=True):
     opt = TestOptions().parse()
     opt.serial_batches = True  # no shuffle
     opt.name = name
-    print(is_train)
+    # print(is_train)
     dataset = DataLoader(opt, is_train)
     model = create_model(opt)
     
@@ -104,12 +104,49 @@ def main(epoch=-1, name="", is_train=True):
         pc_np -= np.expand_dims(pc_mean, 0)
         
         pc = torch.from_numpy(data['pc']).to(device)
-        if opt.is_bimanual_v3:
+        if opt.is_bimanual:
+            dir1, app1, point1, condfidence, z = model.generate_grasps(pc)
+        elif opt.is_bimanual_v3:
             dir1, dir2, app1, app2, point1, point2, condfidence, z = model.generate_grasps(pc)
         else:
             grasps, condfidence, z = model.generate_grasps(pc)
+        if opt.is_bimanual:
+            grasps_R1 = torch.stack([dir1, torch.cross(app1, dir1), app1], dim=2)
+            grasps_t1 = point1 - 0.00675*app1
+            homog_vec =  torch.tensor([0,0,0,1], dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0).repeat(grasps_R1.shape[0], 1, 1)
+            grasp1 = torch.cat((torch.cat((grasps_R1, grasps_t1.unsqueeze(2)), dim=2), homog_vec), dim=1)
+            grasp1 = grasp1.detach().cpu().numpy()
+
             
-        if opt.is_bimanual==False and opt.is_bimanual_v2==True:
+            gt_grasps1 = data['grasp_rt']
+            gt_grasps1 = gt_grasps1.reshape(-1,4,4)
+
+            grasps = []
+            grasps_denormalized = []
+            grasps.append(grasp1)
+            grasps.append(gt_grasps1)
+            
+            for i in range(len(grasps)):
+                grasps_tmp = denormalize_grasps(grasps[i], pc_mean)
+                grasps_denormalized.append(grasps_tmp)
+            grasps = grasps_denormalized
+            
+            grasps = np.asarray(grasps)
+            grasps = grasps.reshape(-1,4,4)
+            gripper_predict_color = [(1.0, 0.0, 0.0) for i in range(opt.num_grasps_per_object)]
+            gripper_gt_color = [(0.0, 1.0, 0.0) for i in range(opt.num_grasps_per_object)]
+            gripper_color = gripper_predict_color + gripper_gt_color
+            
+            mlab.figure(bgcolor=(1,1,1))
+            draw_scene(data['pc'][0],
+                       grasps=grasps,
+                       gripper_color=gripper_color,
+                       is_bimanual=True,
+                       is_bimanual_v2=opt.is_bimanual_v2)
+            print('close the window to continue to next object')
+            mlab.show()
+            
+        elif opt.is_bimanual==False and opt.is_bimanual_v2==True:
             if opt.is_bimanual_v3:
                 grasps_R1 = torch.stack([dir1, torch.cross(app1, dir1), app1], dim=2)
                 grasps_t1 = point1 - 0.00675*app1
@@ -121,8 +158,6 @@ def main(epoch=-1, name="", is_train=True):
                 grasps2_t2 = point2 - 0.00675*app2
                 grasp2 = torch.cat((torch.cat((grasps2_R2, grasps2_t2.unsqueeze(2)), dim=2), homog_vec), dim=1)
                 grasp2 = grasp2.detach().cpu().numpy()
-
-                
             else:
                 grasps1 = grasps[:, 0, :]
                 grasps2 = grasps[:, 1, :]
@@ -387,5 +422,5 @@ def denormalize_grasps(grasps, mean=0, std=1):
 
 if __name__ == '__main__':
     # main(name='/SSD3/Workspace/pytorch_6dof-graspnet/checkpoints/bengio/vae_lr_0002_bs_192_scale_1_npoints_128_radius_02_latent_size_5_bimanual_v2_bimanual_v3_kl_loss_weight_0.001_use_point_loss')
-    main(name='/SSD3/Workspace/pytorch_6dof-graspnet/checkpoints/yeon/vae_lr_001_bs_512_scale_1_latent_size_5_bimanual_v2_bimanual_v3_kl_loss_weight_0.001_use_test_reparam')
+    main(name='/SSD3/Workspace/pytorch_6dof-graspnet/checkpoints/yeon/vae_lr_001_bs_256_scale_1_npoints_512128_radius_0204_latent_size_2_bimanual_npoints_4096_kl_loss_weight_0.001_use_point_loss')
     # main(name='vae_pretrained')

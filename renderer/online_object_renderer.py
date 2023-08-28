@@ -21,6 +21,8 @@ import trimesh.transformations as tra
 from multiprocessing import Manager
 import multiprocessing as mp
 
+from autolab_core import RigidTransform
+
 
 class OnlineObjectRenderer:
     def __init__(self, fov=np.pi / 6, caching=True):
@@ -57,12 +59,17 @@ class OnlineObjectRenderer:
         if (path, scale) in self._cache:
             return self._cache[(path, scale)]
         obj = sample.Object(path)
+        
+        # obj.rescale(scale)
+        # tmesh = obj.mesh
+        # tmesh_mean = np.mean(tmesh.vertices, 0)
+        # tmesh.vertices -= np.expand_dims(tmesh_mean, 0)
+        
+        obj.mesh.apply_transform(RigidTransform(np.eye(3), -obj.mesh.centroid).matrix)
         obj.rescale(scale)
-
         tmesh = obj.mesh
-        tmesh_mean = np.mean(tmesh.vertices, 0)
-        tmesh.vertices -= np.expand_dims(tmesh_mean, 0)
-
+        tmesh_mean = tmesh.centroid
+        
         lbs = np.min(tmesh.vertices, 0)
         ubs = np.max(tmesh.vertices, 0)
         object_distance = np.max(ubs - lbs) * 5
