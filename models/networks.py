@@ -272,8 +272,7 @@ class GraspSampler(nn.Module):
         
     def concatenate_z_with_pc(self, pc, z):
         z.unsqueeze_(1)
-        z = z.expand(-1, pc.shape[1], -1).to(self.device)
-
+        z = z.expand(-1, pc.shape[1], -1)
         return torch.cat((pc, z), -1)
 
     def get_latent_size(self):
