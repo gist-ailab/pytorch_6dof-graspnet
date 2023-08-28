@@ -178,6 +178,7 @@ def main(args):
     grasp_evaluator_args = utils.read_checkpoint_args(
         args.grasp_evaluator_folder)
     grasp_evaluator_args.continue_train = True
+    grasp_sampler_args.use_test_reparam = False
     estimator = grasp_estimator.GraspEstimator(grasp_sampler_args,
                                                grasp_evaluator_args, args)
     if args.train_data:
@@ -196,6 +197,8 @@ def main(args):
             print('close the window to continue to next object . . .')
             mlab.show()
     else:
+        grasp_sampler_args.is_bimanual = False
+        
         for npy_file in glob.glob(os.path.join(args.npy_folder, '*.npy')):
             # Depending on your numpy version you may need to change allow_pickle
             # from True to False.

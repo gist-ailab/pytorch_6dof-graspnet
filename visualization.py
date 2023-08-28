@@ -87,18 +87,19 @@ def main(epoch=-1, name="", is_train=True):
         #     pcd_object.points = o3d.utility.Vector3dVector(pc_np[i])
         #     pcd_object.paint_uniform_color([0.0, 0.0, 1.0])
             
-        #     gt_grasp_point1 = data['target_cps1']
-        #     gt_grasp_point2 = data['target_cps2']
+            # gt_grasp_point1 = data['target_cps1']
+            # gt_grasp_point2 = data['target_cps2']
             
-        #     pcd_grasp1 = o3d.geometry.PointCloud()
-        #     pcd_grasp2 = o3d.geometry.PointCloud()
-        #     pcd_grasp1.points = o3d.utility.Vector3dVector(gt_grasp_point1[i])
-        #     pcd_grasp2.points = o3d.utility.Vector3dVector(gt_grasp_point2[i])
-        #     pcd_grasp1.paint_uniform_color([1.0, 0.0, 0.0])
-        #     pcd_grasp2.paint_uniform_color([1.0, 0.0, 0.0])
+            # pcd_grasp1 = o3d.geometry.PointCloud()
+            # pcd_grasp2 = o3d.geometry.PointCloud()
+            # pcd_grasp1.points = o3d.utility.Vector3dVector(gt_grasp_point1[i])
+            # pcd_grasp2.points = o3d.utility.Vector3dVector(gt_grasp_point2[i])
+            # pcd_grasp1.paint_uniform_color([1.0, 0.0, 0.0])
+            # pcd_grasp2.paint_uniform_color([1.0, 0.0, 0.0])
             
-        #     o3d.visualization.draw_geometries([pcd_object, pcd_grasp1, pcd_grasp2])
-        
+            # o3d.visualization.draw_geometries([pcd_object, pcd_grasp1, pcd_grasp2])
+        #     o3d.visualization.draw_geometries([pcd_object])
+        # exit()
         pc_mean = np.mean(pc_np[0], 0)
         pc_np -= np.expand_dims(pc_mean, 0)
         

@@ -45,11 +45,13 @@ class GraspEstimator:
         self.grasp_evaluator_opt.is_bimanual_v2 = False
         self.grasp_evaluator_opt.is_bimanual_v3 = False
         self.grasp_evaluator_opt.is_dgcnn = False
+        self.grasp_evaluator_opt.is_bimanual = False
         
         self.grasp_sampler_opt.use_anchor = False
         self.grasp_sampler_opt.is_bimanual_v2 = False
         self.grasp_sampler_opt.is_bimanual_v3 = False
         self.grasp_sampler_opt.is_dgcnn = False
+        self.grasp_sampler_opt.is_biamnual = False
         
         self.device = torch.device("cuda:0")
         self.grasp_evaluator = create_model(self.grasp_evaluator_opt)
@@ -200,14 +202,13 @@ class GraspEstimator:
         with torch.no_grad():
             if last_success is None:
                 grasp_pcs = utils.control_points_from_rot_and_trans(
-                    grasp_eulers, grasp_trans, self.device)
+                    grasp_eulers, grasp_trans, self.device) #(batch_size, 6, 3)           
                 last_success = self.grasp_evaluator.evaluate_grasps(
-                    pcs, grasp_pcs)
+                    pcs, grasp_pcs) #(batch_size, 1)
 
-            delta_t = 2 * (torch.rand(grasp_trans.shape).to(self.device) - 0.5)
+            delta_t = 2 * (torch.rand(grasp_trans.shape).to(self.device) - 0.5) #(2,3)
             delta_t *= 0.02
-            delta_euler_angles = (
-                torch.rand(grasp_eulers.shape).to(self.device) - 0.5) * 2
+            delta_euler_angles = (torch.rand(grasp_eulers.shape).to(self.device) - 0.5) * 2
             perturbed_translation = grasp_trans + delta_t
             perturbed_euler_angles = grasp_eulers + delta_euler_angles
             grasp_pcs = utils.control_points_from_rot_and_trans(
@@ -215,14 +216,19 @@ class GraspEstimator:
 
             perturbed_success = self.grasp_evaluator.evaluate_grasps(
                 pcs, grasp_pcs)
+            print(perturbed_success)
+            print(last_success)
             ratio = perturbed_success / torch.max(
                 last_success,
                 torch.tensor(0.0001).to(self.device))
+            print(ratio)
 
             mask = torch.rand(ratio.shape).to(self.device) <= ratio
-
+            print(mask)
             next_success = last_success
             ind = torch.where(mask)[0]
+            print(ind)
+            exit()
             next_success[ind] = perturbed_success[ind]
             grasp_trans[ind].data = perturbed_translation.data[ind]
             grasp_eulers[ind].data = perturbed_euler_angles.data[ind]
