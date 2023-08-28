@@ -126,6 +126,7 @@ def main():
 
         if epoch % opt.run_test_freq == 0:
             acc = run_test(epoch, name=opt.name, is_train=False)
+
             writer.plot_acc(acc, epoch)
 
     writer.close()

@@ -145,17 +145,46 @@ class GraspNetModel:
                         use_anchor=self.opt.use_anchor
                     )
                 elif self.opt.is_bimanual:
-                    dir1, app1, point1, confidence, mu, logvar = out
-                    predicted_cp = utils.transform_control_points_v3(app1, dir1, point1, app1.shape[0], device=self.device)[:,:,:3]
-                    self.reconstruction_loss, self.confidence_loss = self.criterion[1](
-                        predicted_cp,
-                        self.targets,
-                        confidence=confidence,
-                        confidence_weight=self.opt.confidence_weight,
-                        device=self.device,
-                        point_loss=self.opt.use_point_loss,
-                        pred_middle_point=point1,
-                    )
+                    if self.opt.use_block:
+                        dir1_list, app1_list, point1_list, confidence_list, mu_list, logvar_list = out
+                        self.loss = []
+                        self.reconstruction_loss = []
+                        self.confidence_loss = []
+                        self.kl_loss = []
+
+                        for block_idx in range(dir1_list.shape[0]):
+                            predicted_cp = utils.transform_control_points_v3(app1_list[block_idx], dir1_list[block_idx], 
+                                                                             point1_list[block_idx], app1_list[block_idx].shape[0], 
+                                                                             device=self.device)[:,:,:3]
+                            reconstruction_loss, confidence_loss = self.criterion[1](
+                                predicted_cp,
+                                self.targets[block_idx],
+                                confidence=confidence_list[block_idx],
+                                confidence_weight=self.opt.confidence_weight,
+                                device=self.device,
+                                point_loss=self.opt.use_point_loss,
+                                pred_middle_point=point1_list[block_idx],
+                            )
+                            kl_loss = self.opt.kl_loss_weight * self.criterion[0](mu_list[block_idx], logvar_list[block_idx], 
+                                                                                       device=self.device)
+                            self.reconstruction_loss.append(reconstruction_loss)
+                            self.confidence_loss.append(confidence_loss)
+                            self.kl_loss.append(kl_loss)
+                            self.loss.append(kl_loss + reconstruction_loss + confidence_loss)
+                                   
+                            
+                    else:
+                        dir1, app1, point1, confidence, mu, logvar = out
+                        predicted_cp = utils.transform_control_points_v3(app1, dir1, point1, app1.shape[0], device=self.device)[:,:,:3]
+                        self.reconstruction_loss, self.confidence_loss = self.criterion[1](
+                            predicted_cp,
+                            self.targets,
+                            confidence=confidence,
+                            confidence_weight=self.opt.confidence_weight,
+                            device=self.device,
+                            point_loss=self.opt.use_point_loss,
+                            pred_middle_point=point1,
+                        )
                 else:
                     predicted_cp, confidence, mu, logvar = out
 
@@ -200,11 +229,11 @@ class GraspNetModel:
                     point_loss=self.opt.use_point_loss,
                     pred_middle_point=predicted_point,
                     pc=self.pcs)
-                 
-            self.kl_loss = self.opt.kl_loss_weight * self.criterion[0](
-                    mu, logvar, device=self.device)
+            if not self.opt.use_block:
+                self.kl_loss = self.opt.kl_loss_weight * self.criterion[0](
+                        mu, logvar, device=self.device)
 
-            self.loss = self.kl_loss + self.reconstruction_loss + self.confidence_loss
+                self.loss = self.kl_loss + self.reconstruction_loss + self.confidence_loss
                 
         elif self.opt.arch == 'gan':
             if self.opt.is_bimanual_v2:
@@ -251,8 +280,13 @@ class GraspNetModel:
                 self.opt.confidence_weight,
                 device=self.device)
             self.loss = self.classification_loss + self.confidence_loss
-
-        self.loss.backward()
+        
+        if self.opt.use_block:
+            for block_idx in range(len(self.loss)-1):
+                self.loss[block_idx].backward(retain_graph=True)
+            self.loss[-1].backward()    
+        else:
+            self.loss.backward()
 
     def optimize_parameters(self):
         self.optimizer.zero_grad()
@@ -333,15 +367,38 @@ class GraspNetModel:
                                 device=self.device,
                                 use_anchor=self.opt.use_anchor)
                         elif self.opt.is_bimanual:
-                            predicted_cp = utils.transform_control_points_v3(app1, dir1, point1, app1.shape[0], device=self.device)[:,:,:3]
-                            reconstruction_loss, _ = self.criterion[1](
-                                predicted_cp,
-                                self.targets,
-                                confidence=confidence,
-                                confidence_weight=self.opt.confidence_weight,
-                                point_loss=self.opt.use_point_loss,
-                                pred_middle_point=point1,
-                            )
+                            if self.opt.use_block:
+                                # self.loss = []
+                                # self.reconstruction_loss = []
+                                # self.confidence_loss = []
+                                # self.kl_loss = []
+                                reconstruction_loss_list = []
+                                for block_idx in range(dir1.shape[0]):
+                                    predicted_cp = utils.transform_control_points_v3(app1[block_idx], dir1[block_idx], 
+                                                                                    point1[block_idx], app1[block_idx].shape[0], 
+                                                                                    device=self.device)[:,:,:3]
+                                    reconstruction_loss, _ = self.criterion[1](
+                                        predicted_cp,
+                                        self.targets[block_idx],
+                                        confidence=confidence[block_idx],
+                                        confidence_weight=self.opt.confidence_weight,
+                                        device=self.device,
+                                        point_loss=self.opt.use_point_loss,
+                                        pred_middle_point=point1[block_idx],
+                                    )
+                                    reconstruction_loss_list.append(reconstruction_loss)
+                                
+                                reconstruction_loss = reconstruction_loss_list
+                            else:
+                                predicted_cp = utils.transform_control_points_v3(app1, dir1, point1, app1.shape[0], device=self.device)[:,:,:3]
+                                reconstruction_loss, _ = self.criterion[1](
+                                    predicted_cp,
+                                    self.targets,
+                                    confidence=confidence,
+                                    confidence_weight=self.opt.confidence_weight,
+                                    point_loss=self.opt.use_point_loss,
+                                    pred_middle_point=point1,
+                                )
                         else:
                             predicted_cp = utils.transform_control_points(
                                 prediction, prediction.shape[0], device=self.device, is_bimanual=self.opt.is_bimanual)[:,:,:3]

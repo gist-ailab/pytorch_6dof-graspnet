@@ -212,27 +212,64 @@ class GraspSampler(nn.Module):
                 self.t2 = nn.Linear(model_scale * 1024, 3)
                 self.confidence = nn.Linear(model_scale * 1024, 1)
             
-    def decode(self, xyz, z, is_bimanual_v2=False, is_dgcnn=False, is_bimanual_v3=False, is_bimanual=False, second_grasp_sample=False, first_grasp=None):
+    def decode(self, xyz, z, is_bimanual_v2=False, is_dgcnn=False, is_bimanual_v3=False, is_bimanual=False, 
+               second_grasp_sample=False, first_grasp=None, use_block=False, features=None):
         if not is_bimanual_v2:
             if is_dgcnn:
                 xyz_features = z.unsqueeze(1).expand(-1, xyz.shape[1], -1)
                 xyz_features = torch.transpose(xyz_features, 1, 2).contiguous()
                 xyz_features = self.decoder[0](xyz, xyz_features)
                 x = self.decoder[1](xyz_features.squeeze(-1))
+            
             elif is_bimanual:
-                if second_grasp_sample:
-                    xyz_features = self.concatenate_z_with_pc(xyz,z)
-                    xyz_features = torch.cat((xyz_features, first_grasp.unsqueeze(1).expand(-1, xyz.shape[1], -1)), -1).transpose(-1,1).contiguous()
+                if use_block:
+                    pc = xyz
+                    origin_features = features
+                    predicted_dir1_list = []
+                    predicted_app1_list = []
+                    predicted_point1_list = []
+                    predicted_confidence_list = []
+                    for block_idx in range(z.shape[0]):
+                        xyz = pc
+                        xyz_features = origin_features
+                        
+                        xyz_features = self.concatenate_z_with_pc(xyz,z[block_idx])
+                        if features is not None:
+                            xyz_features = torch.cat((xyz_features, features[block_idx]), -1)
+                        xyz_features = xyz_features.transpose(-1,1).contiguous()
+                        for module in self.decoder[0]:
+                            xyz, xyz_features = module(xyz, xyz_features)
+                        predicted_dir1 = F.normalize(self.dir1_layer(xyz_features),p=2,dim=1).squeeze(-1)
+                        predicted_app1 = F.normalize(self.app1_layer(xyz_features),p=2,dim=1).squeeze(-1)
+                        predicted_point1 = self.point1_layer(xyz_features).squeeze(-1)
+                        predicted_confidence = torch.sigmoid(self.confidence(xyz_features.squeeze(-1))).squeeze()
+                        
+                        predicted_dir1_list.append(predicted_dir1)
+                        predicted_app1_list.append(predicted_app1)
+                        predicted_point1_list.append(predicted_point1)
+                        predicted_confidence_list.append(predicted_confidence)
+                    
+                    predicted_dir1_list = torch.stack(predicted_dir1_list, dim=0)
+                    predicted_app1_list = torch.stack(predicted_app1_list, dim=0)
+                    predicted_point1_list = torch.stack(predicted_point1_list, dim=0)
+                    predicted_confidence_list = torch.stack(predicted_confidence_list, dim=0)
+                    
+                    return predicted_dir1_list, predicted_app1_list, predicted_point1_list, predicted_confidence_list
+                
                 else:
-                    xyz_features = self.concatenate_z_with_pc(xyz,z).transpose(-1,1).contiguous()
+                    if second_grasp_sample:
+                        xyz_features = self.concatenate_z_with_pc(xyz,z)
+                        xyz_features = torch.cat((xyz_features, first_grasp.unsqueeze(1).expand(-1, xyz.shape[1], -1)), -1).transpose(-1,1).contiguous()
+                    else:
+                        xyz_features = self.concatenate_z_with_pc(xyz,z).transpose(-1,1).contiguous()
 
-                for module in self.decoder[0]:
-                    xyz, xyz_features = module(xyz, xyz_features)
-                predicted_dir1 = F.normalize(self.dir1_layer(xyz_features),p=2,dim=1).squeeze(-1)
-                predicted_app1 = F.normalize(self.app1_layer(xyz_features),p=2,dim=1).squeeze(-1)
-                predicted_point1 = self.point1_layer(xyz_features).squeeze(-1)
-                predicted_confidence = torch.sigmoid(self.confidence(xyz_features.squeeze(-1))).squeeze()
-                return predicted_dir1, predicted_app1, predicted_point1, predicted_confidence
+                    for module in self.decoder[0]:
+                        xyz, xyz_features = module(xyz, xyz_features)
+                    predicted_dir1 = F.normalize(self.dir1_layer(xyz_features),p=2,dim=1).squeeze(-1)
+                    predicted_app1 = F.normalize(self.app1_layer(xyz_features),p=2,dim=1).squeeze(-1)
+                    predicted_point1 = self.point1_layer(xyz_features).squeeze(-1)
+                    predicted_confidence = torch.sigmoid(self.confidence(xyz_features.squeeze(-1))).squeeze()
+                    return predicted_dir1, predicted_app1, predicted_point1, predicted_confidence
                 
             else:
                 xyz_features = self.concatenate_z_with_pc(xyz,z).transpose(-1,1).contiguous()
@@ -663,6 +700,8 @@ class GraspSamplerVAEBlock(GraspSampler):
         elif self.is_bimanual_v3:
             self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
                                 latent_size+3, self.is_bimanual_v2, is_bimanual_v3=True)
+        else:
+            self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters, latent_size+3+1, is_bimanual=True)
         
         self.create_bottleneck(model_scale * 1024, latent_size)
                 
@@ -712,17 +751,31 @@ class GraspSamplerVAEBlock(GraspSampler):
             z_list.append(z)
 
         z_list = torch.stack(z_list, dim=0)
-        print(z_list.shape)
-        exit()
+
         return z_list
 
     def bottleneck(self, z):
         return self.latent_space[0](z), self.latent_space[1](z)
 
-    def reparameterize(self, mu, logvar):
-        std = torch.exp(0.5 * logvar)
-        eps = torch.randn_like(std)
-        return mu + eps * std
+    def reparameterize(self, z_list, num_block):
+        mu_list = []
+        logvar_list = []
+        reparam_z_list = []
+        for block_idx in range(num_block):
+            mu, logvar = self.bottleneck(z_list[block_idx])
+            mu_list.append(mu)
+            logvar_list.append(logvar)
+            std = torch.exp(0.5 * logvar)
+            eps = torch.randn_like(std)
+            reparam_z_list.append(mu + eps * std)
+        
+        mu_list = torch.stack(mu_list, dim=0)
+        logvar_list = torch.stack(logvar_list, dim=0)
+        reparam_z_list = torch.stack(reparam_z_list, dim=0)
+        return reparam_z_list, mu_list, logvar_list
+        # std = torch.exp(0.5 * logvar)
+        # eps = torch.randn_like(std)
+        # return mu + eps * std
 
     def forward(self, pc, grasp=None, train=True, features=None):
         if train:
@@ -731,24 +784,33 @@ class GraspSamplerVAEBlock(GraspSampler):
             return self.forward_test(pc, grasp, features=features)
 
     def forward_train(self, pc, grasp, features=None):
-        # for block_idx in range(grasp.shape[0]):
-        #     input_features = torch.cat((pc, grasp[block_idx].unsqueeze(1).expand(-1, pc.shape[1], -1)),-1)
-        #     features = torch.cat((input_features, features[block_idx]), -1)
-        #     features = features.transpose(-1, 1).contiguous()
-            
-        z = self.encode(pc, grasp, features) #(64, 1024)
 
-        # print('encode time', end - start)
-        mu, logvar = self.bottleneck(z)
-        z = self.reparameterize(mu, logvar) # (96, 5)
-        if self.is_bimanual_v3:
-            dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=True)
-            return dir1, dir2, app1, app2, point1, point2, confidence, mu, logvar
-        else:
-            qt, confidence = self.decode(pc, z, self.is_bimanual_v2, self.is_dgcnn)
-            return qt, confidence, mu, logvar
+        z_list = self.encode(pc, grasp, features) #(64, 1024)
+
+        # mu, logvar = self.bottleneck(z)
+        z_list, mu_list, logvar_list = self.reparameterize(z_list, grasp.shape[0]) # (96, 5)
+        
+        dir1_list, app1_list, point1_list, confidence_list = self.decode(pc, z_list, is_bimanual=True, use_block=True, features=features)
+        
+        return dir1_list, app1_list, point1_list, confidence_list, mu_list, logvar_list
+        # if self.is_bimanual_v3:
+        #     dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=True)
+        #     return dir1, dir2, app1, app2, point1, point2, confidence, mu, logvar
+        # else:
+        #     qt, confidence = self.decode(pc, z, self.is_bimanual_v2, self.is_dgcnn)
+        #     return qt, confidence, mu, logvar
             
-    def forward_test(self, pc, grasp):
+    def forward_test(self, pc, grasp, features=None):
+        
+        z_list = self.encode(pc, grasp, features) #(64, 1024)
+
+        # mu, logvar = self.bottleneck(z)
+        z_list, mu_list, logvar_list = self.reparameterize(z_list, grasp.shape[0]) # (96, 5)
+        
+        dir1_list, app1_list, point1_list, confidence_list = self.decode(pc, mu_list, is_bimanual=True, use_block=True, features=features)
+        
+        return dir1_list, app1_list, point1_list, confidence_list
+        
         if self.is_dgcnn:
             input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
             input_features = torch.transpose(input_features, 1, 2).contiguous() # (64, 16, 1024)

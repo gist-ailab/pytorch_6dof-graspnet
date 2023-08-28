@@ -18,6 +18,12 @@ def run_test(epoch=-1, name="", is_train=True):
     for i, data in enumerate(dataset):
         model.set_input(data)
         ncorrect, nexamples = model.test()
+        if opt.use_block:
+            ncorrect_tmp = 0
+            for j in range(len(ncorrect)):
+                ncorrect_tmp += ncorrect[j]
+            ncorrect_tmp /= len(ncorrect)
+            ncorrect = ncorrect_tmp
         writer.update_counter(ncorrect, nexamples)
     writer.print_acc(epoch, writer.acc)
     return writer.acc
