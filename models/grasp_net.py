@@ -58,20 +58,23 @@ class GraspNetModel:
                 else:
                     targets = torch.from_numpy(data['anchor1']).float()
                 self.pcs = input_pcs.to(self.device).requires_grad_(self.is_train)
+
                 self.grasps = input_grasps.to(self.device).requires_grad_(
                     self.is_train)
                 self.targets = targets.to(self.device)
             
             elif self.opt.use_block:
                 input_pcs = torch.from_numpy(data['pc']).contiguous()
-                input_grasps = torch.from_numpy(data['grasp_rt']).float()
-                features = torch.from_numpy(data['features']).float()
+
+                input_grasps = torch.from_numpy(data['grasp_rt']).float().transpose(0, 1)
+                features = torch.from_numpy(data['features']).float().transpose(0,1)
                 if self.opt.arch == "evaluator":
                     targets = torch.from_numpy(data['labels']).float()
                 else:
                     targets = torch.from_numpy(data['target_cps']).float()
                 self.features = features.to(self.device).requires_grad_(self.is_train)
                 self.pcs = input_pcs.to(self.device).requires_grad_(self.is_train)
+
                 self.grasps = input_grasps.to(self.device).requires_grad_(self.is_train)
                 self.targets = targets.to(self.device)          
             
@@ -129,8 +132,11 @@ class GraspNetModel:
         return torch.sigmoid(success)
 
     def forward(self):
-        return self.net(self.pcs, self.grasps, train=self.is_train, features=self.features)
-
+        if self.opt.use_block:
+            return self.net(self.pcs, self.grasps, train=self.is_train, features=self.features, targets=self.targets)
+        else:
+            return self.net(self.pcs, self.grasps, train=self.is_train)
+            
     def backward(self, out):
         if self.opt.arch == 'vae':
             if not self.opt.is_bimanual_v2:
@@ -146,32 +152,43 @@ class GraspNetModel:
                     )
                 elif self.opt.is_bimanual:
                     if self.opt.use_block:
-                        dir1_list, app1_list, point1_list, confidence_list, mu_list, logvar_list = out
+                        dir1_list, app1_list, point1_list, confidence_list, mu_list, logvar_list, target_list = out
                         self.loss = []
                         self.reconstruction_loss = []
                         self.confidence_loss = []
                         self.kl_loss = []
 
+                        dir1_list = dir1_list.transpose(0, 1)
+                        app1_list = app1_list.transpose(0, 1)
+                        point1_list = point1_list.transpose(0, 1)
+                        confidence_list = confidence_list.transpose(0, 1)
+                        mu_list = mu_list.transpose(0, 1)
+                        logvar_list = logvar_list.transpose(0, 1)
+                        target_list = target_list.transpose(0, 1)
                         for block_idx in range(dir1_list.shape[0]):
+                        
                             predicted_cp = utils.transform_control_points_v3(app1_list[block_idx], dir1_list[block_idx], 
-                                                                             point1_list[block_idx], app1_list[block_idx].shape[0], 
-                                                                             device=self.device)[:,:,:3]
+                                                                                point1_list[block_idx], app1_list.shape[1], 
+                                                                                device=self.device)[:,:,:3]
+                            # print('predicted_cp', predicted_cp.shape)
+                            
                             reconstruction_loss, confidence_loss = self.criterion[1](
                                 predicted_cp,
-                                self.targets[block_idx],
+                                target_list[block_idx],
                                 confidence=confidence_list[block_idx],
                                 confidence_weight=self.opt.confidence_weight,
                                 device=self.device,
                                 point_loss=self.opt.use_point_loss,
                                 pred_middle_point=point1_list[block_idx],
+                                use_block=True
                             )
                             kl_loss = self.opt.kl_loss_weight * self.criterion[0](mu_list[block_idx], logvar_list[block_idx], 
-                                                                                       device=self.device)
+                                                                                        device=self.device)
                             self.reconstruction_loss.append(reconstruction_loss)
                             self.confidence_loss.append(confidence_loss)
                             self.kl_loss.append(kl_loss)
                             self.loss.append(kl_loss + reconstruction_loss + confidence_loss)
-                                   
+                        
                             
                     else:
                         dir1, app1, point1, confidence, mu, logvar = out
@@ -284,10 +301,23 @@ class GraspNetModel:
         if self.opt.use_block:
             for block_idx in range(len(self.loss)-1):
                 self.loss[block_idx].backward(retain_graph=True)
-            self.loss[-1].backward()    
+            self.loss[-1].backward()
+            
+            self.reconstruction_loss = torch.stack(self.reconstruction_loss, dim=0)
+            self.confidence_loss = torch.stack(self.confidence_loss, dim=0)
+            self.kl_loss = torch.stack(self.kl_loss, dim=0)
+            self.loss = torch.stack(self.loss, dim=0)
+            # print(self.reconstruction_loss.shape)
+            
+            # self.reconstruction_loss = self.reconstruction_loss.transpose(0, 1)
+            # self.confidence_loss = self.confidence_loss.transpose(0, 1)
+            # self.kl_loss = self.kl_loss.transpose(0, 1)
+            # self.loss = self.loss.transpose(0, 1)
+            # exit()
         else:
             self.loss.backward()
 
+        
     def optimize_parameters(self):
         self.optimizer.zero_grad()
         out = self.forward()
@@ -346,7 +376,10 @@ class GraspNetModel:
             if self.opt.is_bimanual_v3:
                 dir1, dir2, app1, app2, point1, point2, confidence = out
             elif self.opt.is_bimanual:
-                dir1, app1, point1, confidence = out
+                if self.opt.use_block:
+                    dir1, app1, point1, confidence, target_list = out
+                else: 
+                    dir1, app1, point1, confidence = out
             else:
                 prediction, confidence = out
             if vis:
@@ -372,6 +405,12 @@ class GraspNetModel:
                                 # self.reconstruction_loss = []
                                 # self.confidence_loss = []
                                 # self.kl_loss = []
+                                dir1 = dir1.transpose(0, 1)
+                                app1 = app1.transpose(0, 1)
+                                point1 = point1.transpose(0, 1)
+                                confidence = confidence.transpose(0, 1)
+                                target_list = target_list.transpose(0, 1)
+                                
                                 reconstruction_loss_list = []
                                 for block_idx in range(dir1.shape[0]):
                                     predicted_cp = utils.transform_control_points_v3(app1[block_idx], dir1[block_idx], 
@@ -379,7 +418,7 @@ class GraspNetModel:
                                                                                     device=self.device)[:,:,:3]
                                     reconstruction_loss, _ = self.criterion[1](
                                         predicted_cp,
-                                        self.targets[block_idx],
+                                        target_list[block_idx],
                                         confidence=confidence[block_idx],
                                         confidence_weight=self.opt.confidence_weight,
                                         device=self.device,

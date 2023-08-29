@@ -731,13 +731,14 @@ class GraspSamplerVAEBlock(GraspSampler):
         self.latent_space = nn.ModuleList([mu, logvar])
 
     def encode(self, xyz, grasp, xyz_features):
+        
         z_list = []
-        pc = xyz
+        pc = xyz 
         features = xyz_features
         for block_idx in range(grasp.shape[0]):
             xyz = pc
             xyz_features = features
-            
+
             input_features = torch.cat((xyz, grasp[block_idx].unsqueeze(1).expand(-1, xyz.shape[1], -1)),-1)
             xyz_features = torch.cat((input_features, xyz_features[block_idx]), -1)
             xyz_features = xyz_features.transpose(-1, 1).contiguous()
@@ -777,14 +778,17 @@ class GraspSamplerVAEBlock(GraspSampler):
         # eps = torch.randn_like(std)
         # return mu + eps * std
 
-    def forward(self, pc, grasp=None, train=True, features=None):
+    def forward(self, pc, grasp=None, train=True, features=None, targets=None):
         if train:
-            return self.forward_train(pc, grasp, features=features)
+            return self.forward_train(pc, grasp, features=features, targets=targets)
         else:
-            return self.forward_test(pc, grasp, features=features)
+            return self.forward_test(pc, grasp, features=features, targets=targets)
 
-    def forward_train(self, pc, grasp, features=None):
+    def forward_train(self, pc, grasp, features=None, targets=None):
 
+        grasp = grasp.transpose(0,1)
+        features = features.transpose(0,1)
+        targets = targets.transpose(0,1)
         z_list = self.encode(pc, grasp, features) #(64, 1024)
 
         # mu, logvar = self.bottleneck(z)
@@ -792,7 +796,8 @@ class GraspSamplerVAEBlock(GraspSampler):
         
         dir1_list, app1_list, point1_list, confidence_list = self.decode(pc, z_list, is_bimanual=True, use_block=True, features=features)
         
-        return dir1_list, app1_list, point1_list, confidence_list, mu_list, logvar_list
+        return dir1_list.transpose(0,1), app1_list.transpose(0,1), point1_list.transpose(0,1), \
+               confidence_list.transpose(0,1), mu_list.transpose(0,1), logvar_list.transpose(0,1), targets.transpose(0,1)
         # if self.is_bimanual_v3:
         #     dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=True)
         #     return dir1, dir2, app1, app2, point1, point2, confidence, mu, logvar
@@ -800,8 +805,11 @@ class GraspSamplerVAEBlock(GraspSampler):
         #     qt, confidence = self.decode(pc, z, self.is_bimanual_v2, self.is_dgcnn)
         #     return qt, confidence, mu, logvar
             
-    def forward_test(self, pc, grasp, features=None):
-        
+    def forward_test(self, pc, grasp, features=None, targets=None):
+        grasp = grasp.transpose(0,1)
+        features = features.transpose(0,1)
+        targets = targets.transpose(0,1)
+
         z_list = self.encode(pc, grasp, features) #(64, 1024)
 
         # mu, logvar = self.bottleneck(z)
@@ -809,7 +817,8 @@ class GraspSamplerVAEBlock(GraspSampler):
         
         dir1_list, app1_list, point1_list, confidence_list = self.decode(pc, mu_list, is_bimanual=True, use_block=True, features=features)
         
-        return dir1_list, app1_list, point1_list, confidence_list
+        return dir1_list.transpose(0,1), app1_list.transpose(0,1), \
+               point1_list.transpose(0,1), confidence_list.transpose(0,1), targets.transpose(0,1)
         
         if self.is_dgcnn:
             input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
