@@ -1047,9 +1047,9 @@ class BimanualBlockGraspSamplingData(BaseDataset):
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
         
         if not self.is_train:
-            files = files[100:120]
+            files = files[20:24]
         else:
-            files = files[:100] #3315
+            files = files[:20] #3315
 
         return files
     
