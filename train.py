@@ -63,7 +63,7 @@ def main():
             # exit()
             
             ################*
-            
+            # print('i>>>>>>>', i)
             iter_start_time = time.time()
             if total_steps % opt.print_freq == 0:
                 t_data = iter_start_time - iter_data_time

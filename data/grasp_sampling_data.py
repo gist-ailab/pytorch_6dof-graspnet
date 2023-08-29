@@ -99,6 +99,8 @@ class BimanualGraspSamplingData(BaseDataset):
         self.is_train = is_train
         self.paths = self.make_dataset()
         self.size = len(self.paths)
+        self.train_data_length = self.opt.train_data_length
+        self.test_data_length = self.opt.test_data_length
         self.i = 0
         self.cache = {}
         # load all the grasp data before training
@@ -115,9 +117,9 @@ class BimanualGraspSamplingData(BaseDataset):
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
         
         if not self.is_train:
-            files = files[100:120]
+            files = files[self.opt.train_data_length:self.opt.train_data_length+self.opt.test_data_length]
         else:
-            files = files[:100] #3315
+            files = files[:self.opt.train_data_length] #3315
 
         return files
     

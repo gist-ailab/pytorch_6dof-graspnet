@@ -54,13 +54,13 @@ class Writer:
             message = '(epoch: %d, iters: %d, time: %.3f, data: %.3f)' \
                     % (epoch, i, t, t_data)
             for (loss_type, loss_value) in zip(loss_types, losses):
-                loss_tmp=0
+                # loss_tmp=0
 
-                for loss in loss_value:
-                    loss_tmp += loss.item()
+                # for loss in loss_value:
+                #     loss_tmp += loss.item()
 
-                loss_tmp /= len(loss_value)
-                message += ' %s: %.6f' % (loss_type, loss_tmp)
+                # loss_tmp /= len(loss_value)
+                message += ' %s: %.6f' % (loss_type, loss_value)
         else:
             message = '(epoch: %d, iters: %d, time: %.3f, data: %.3f) loss: %.3f ' \
                     % (epoch, i, t, t_data, losses.item())
@@ -73,12 +73,12 @@ class Writer:
         if self.display:
             if type(losses) == list:
                 for (loss_type, loss_value) in zip(loss_types, losses):
-                    loss_tmp=0
-                    for loss in loss_value:
-                        loss_tmp += loss.item()
-                    loss_tmp /= len(loss_value)
+                    # loss_tmp=0
+                    # for loss in loss_value:
+                    #     loss_tmp += loss.item()
+                    # loss_tmp /= len(loss_value)
                     self.display.add_scalar('data/train_loss/' + loss_type,
-                                            loss_tmp, iters)
+                                            loss_value, iters)
             else:
                 self.display.add_scalar('data/train_loss', losses, iters)
 

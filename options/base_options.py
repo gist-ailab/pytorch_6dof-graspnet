@@ -230,6 +230,16 @@ class BaseOptions:
             type=bool,
             default=False
         )
+        self.parser.add_argument(
+            '--train_data_length',
+            type=int,
+            default=100
+        )
+        self.parser.add_argument(
+            '--test_data_length',
+            type=int,
+            default=10
+        )
         
     def parse(self):
         if not self.initialized:
@@ -301,7 +311,7 @@ class BaseOptions:
                 name += "_use_test_reparam"
             if self.opt.num_grasps_per_object2 is not None:
                 name += "_num_grasps_per_object2_" + str(self.opt.num_grasps_per_object2)
-                
+            name += "_train_data_length_" + str(self.opt.train_data_length)
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)
             if os.path.isdir(expr_dir) and not self.opt.continue_train:
