@@ -55,6 +55,7 @@ class Writer:
                     % (epoch, i, t, t_data)
             for (loss_type, loss_value) in zip(loss_types, losses):
                 loss_tmp=0
+
                 for loss in loss_value:
                     loss_tmp += loss.item()
 

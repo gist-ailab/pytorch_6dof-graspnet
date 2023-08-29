@@ -1047,9 +1047,9 @@ class BimanualBlockGraspSamplingData(BaseDataset):
         files = [os.path.join(self.opt.dataset_root_folder, 'grasps_processed', file) for file in file_list]
         
         if not self.is_train:
-            files = files[20:24]
+            files = files[100:120]
         else:
-            files = files[:20] #3315
+            files = files[:100] #3315
 
         return files
     
@@ -1186,12 +1186,14 @@ class BimanualBlockGraspSamplingData(BaseDataset):
             output_grasps_points.append(block_sampled_grasp_points[key][sampled_grasp_idxs])
             block_features.append(features)
         output_grasps = np.array(output_grasps)
-        output_grasps_points = np.array(output_grasps_points)
+        output_grasps_points = np.array(output_grasps_points).transpose(1, 0, 2, 3)
         block_features = np.array(block_features)
 
         
         meta['pc'] = np.array([pc] * self.opt.num_grasps_per_object)[:, :, :3]
+
         meta['features'] = block_features
+
         meta['grasp_rt'] = output_grasps.reshape(output_grasps.shape[0], output_grasps.shape[1], -1)
         # meta['grasp_rt2'] = np.array(output_grasps2).reshape(
         #     len(output_grasps2), -1)
