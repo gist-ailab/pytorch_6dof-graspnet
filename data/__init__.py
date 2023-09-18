@@ -9,7 +9,7 @@ def CreateDataset(opt, is_train=True):
     if opt.arch == 'vae' or opt.arch == 'gan':
         from data.grasp_sampling_data import GraspSamplingData, BimanualGraspSamplingData, \
         BimanualGraspSamplingDataV2, BimanualGraspSamplingDataV3, BimanualBlockGraspSamplingData,\
-        BimanualAnchorGraspSamplingData, BimanualSecondGraspSamplingData
+        BimanualAnchorGraspSamplingData, BimanualSecondGraspSamplingData, BimanualCrossConditionGraspSamplingData
         if opt.is_bimanual:
             if opt.use_block:
                 dataset = BimanualBlockGraspSamplingData(opt, is_train=is_train)
@@ -24,7 +24,10 @@ def CreateDataset(opt, is_train=True):
         elif opt.is_bimanual_v2 and not opt.is_bimanual_v3:
             dataset = BimanualGraspSamplingDataV2(opt, is_train=is_train)
         elif opt.is_bimanual_v3:
-            dataset = BimanualGraspSamplingDataV3(opt, is_train=is_train) 
+            if opt.cross_condition:
+                dataset = BimanualCrossConditionGraspSamplingData(opt, is_train=is_train)
+            else:
+                dataset = BimanualGraspSamplingDataV3(opt, is_train=is_train) 
         else:
             dataset = GraspSamplingData(opt)
     else:
