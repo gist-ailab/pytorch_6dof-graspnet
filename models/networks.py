@@ -9,6 +9,7 @@ from torch.nn import Sequential as Seq, Linear as Lin, ReLU, BatchNorm1d as BN
 import pointnet2_ops.pointnet2_modules as pointnet2
 from time import time
 import copy
+import utils.utils as utils
 
 def get_scheduler(optimizer, opt):
     if opt.lr_policy == 'lambda':
@@ -81,6 +82,9 @@ def define_classifier(opt, gpu_ids, arch, init_type, init_gain, device):
                                         opt.pointnet_nclusters, opt.latent_size, device)
         elif opt.use_block:
             net = GraspSamplerVAEBlock(opt.model_scale, opt.pointnet_radius, opt.pointnet_nclusters, opt.latent_size, device)
+        elif opt.cross_condition:
+            net = GraspSamplerCrossConditionVAE(opt.model_scale, opt.pointnet_radius, opt.pointnet_nclusters, 
+                                                opt.latent_size, device, cross_condition=opt.cross_condition)
         else:
             net = GraspSamplerVAE(opt.model_scale, opt.pointnet_radius,
                                 opt.pointnet_nclusters, opt.latent_size, device, 
@@ -496,6 +500,280 @@ class GraspSamplerVAE(GraspSampler):
         return torch.stack([latents[i].flatten() for i in range(len(latents))],
                            dim=-1).to(self.device)
 
+class GraspSamplerCrossConditionVAE(GraspSampler):
+    """Network for learning a generative VAE grasp-sampler
+    """
+    def __init__(self,
+                 model_scale,
+                 pointnet_radius=0.02,
+                 pointnet_nclusters=128,
+                 latent_size=2,
+                 device="cpu",
+                 cross_condition=False):
+        super(GraspSamplerCrossConditionVAE, self).__init__(latent_size, device)
+        self.device = device
+
+        # self.is_bimanual_v2 = is_bimanual_v2
+        # self.is_bimanual_v3 = is_bimanual_v3
+        # self.is_dgcnn = is_dgcnn
+        # self.use_test_reparam = use_test_reparam
+        # self.is_bimanual = is_bimanual
+        # self.second_grasp_sample = second_grasp_sample
+        
+        self.create_encoder(model_scale, pointnet_radius, pointnet_nclusters, self.is_dgcnn)
+        self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters, num_input_features=latent_size+3)
+        # if self.is_dgcnn:
+        #     self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
+        #                         latent_size, self.is_bimanual_v2, is_dgcnn=True)
+        # elif self.is_bimanual_v2 and not self.is_bimanual_v3:
+        #     self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
+        #                         latent_size + 3, self.is_bimanual_v2)
+        # elif self.is_bimanual_v3:
+        #     self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
+        #                         latent_size+3, self.is_bimanual_v2, is_bimanual_v3=True)
+        # elif self.second_grasp_sample:
+        #     self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,latent_size+19, is_bimanual=self.is_bimanual)
+        # else:
+        #     self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters, latent_size+3, is_bimanual=self.is_bimanual)
+        
+        self.create_bottleneck(model_scale * 1024, latent_size)
+                
+    def create_encoder(
+            self,
+            model_scale,
+            pointnet_radius,
+            pointnet_nclusters,
+            bimanual=False):
+        # The number of input features for the encoder is 19: the x, y, z
+        # position of the point-cloud and the flattened 4x4=16 grasp pose matrix
+        # if self.is_bimanual_v2:
+        #     self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 35)
+        # elif self.is_dgcnn:
+        #     self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 16, is_dgcnn=True, device=self.device)
+        # elif self.second_grasp_sample:
+        #     self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 35)
+        # else:
+        #     self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 19)
+        self.encoder = base_network(pointnet_radius, pointnet_nclusters, model_scale, 35)
+
+    def create_decoder(self, model_scale, pointnet_radius, pointnet_nclusters, num_input_features):
+        #* create decoders for grasp pair generator and single grasp genertor conditioned with grasp pair
+        # for grasp pair generator
+        self.decoder1 = base_network(pointnet_radius, pointnet_nclusters, model_scale, num_input_features)
+        self.dir11_layer = nn.Sequential(nn.Conv1d(512, 256, 1), 
+                                        nn.BatchNorm1d(256), nn.ReLU(True),
+                                        nn.Conv1d(256, 128, 1),
+                                        nn.BatchNorm1d(128), nn.ReLU(True),
+                                        nn.Conv1d(128, 3, 1))
+        
+        self.dir12_layer = nn.Sequential(nn.Conv1d(512, 256, 1), 
+                                        nn.BatchNorm1d(256), nn.ReLU(True),
+                                        nn.Conv1d(256, 128, 1),
+                                        nn.BatchNorm1d(128), nn.ReLU(True),
+                                        nn.Conv1d(128, 3, 1))
+        
+        self.app11_layer = nn.Sequential(nn.Conv1d(512, 256, 1), 
+                                        nn.BatchNorm1d(256), nn.ReLU(True),
+                                        nn.Conv1d(256, 128, 1),
+                                        nn.BatchNorm1d(128), nn.ReLU(True),
+                                        nn.Conv1d(128, 3, 1))
+        
+        self.app12_layer = nn.Sequential(nn.Conv1d(512, 256, 1),
+                                        nn.BatchNorm1d(256), nn.ReLU(True),
+                                        nn.Conv1d(256, 128, 1),
+                                        nn.BatchNorm1d(128), nn.ReLU(True),
+                                        nn.Conv1d(128, 3, 1))
+        
+        self.point11_layer = nn.Sequential(nn.Conv1d(512, 256, 1), 
+                                        nn.BatchNorm1d(256), nn.ReLU(True),
+                                        nn.Conv1d(256, 128, 1),
+                                        nn.BatchNorm1d(128), nn.ReLU(True),
+                                        nn.Conv1d(128, 3, 1))
+        
+        self.point12_layer = nn.Sequential(nn.Conv1d(512, 256, 1), 
+                                        nn.BatchNorm1d(256), nn.ReLU(True),
+                                        nn.Conv1d(256, 128, 1),
+                                        nn.BatchNorm1d(128), nn.ReLU(True),
+                                        nn.Conv1d(128, 3, 1))
+        self.confidence1 = nn.Linear(512, 1)
+        #for single grasp generator conditioned with grasp pair
+        self.decoder2 = base_network(pointnet_radius, pointnet_nclusters, model_scale, num_input_features+16)
+        self.dir2_layer = nn.Sequential(nn.Conv1d(512, 256, 1), 
+                                        nn.BatchNorm1d(256), nn.ReLU(True),
+                                        nn.Conv1d(256, 128, 1),
+                                        nn.BatchNorm1d(128), nn.ReLU(True),
+                                        nn.Conv1d(128, 3, 1))
+        self.app2_layer = nn.Sequential(nn.Conv1d(512, 256, 1), 
+                                        nn.BatchNorm1d(256), nn.ReLU(True),
+                                        nn.Conv1d(256, 128, 1),
+                                        nn.BatchNorm1d(128), nn.ReLU(True),
+                                        nn.Conv1d(128, 3, 1))
+        self.point2_layer = nn.Sequential(nn.Conv1d(512, 256, 1), 
+                                        nn.BatchNorm1d(256), nn.ReLU(True),
+                                        nn.Conv1d(256, 128, 1),
+                                        nn.BatchNorm1d(128), nn.ReLU(True),
+                                        nn.Conv1d(128, 3, 1))
+        self.confidence2 = nn.Linear(512, 1)
+
+
+
+
+    def create_bottleneck(self, input_size, latent_size):
+        mu1 = nn.Linear(input_size, latent_size)
+        logvar1 = nn.Linear(input_size, latent_size)
+        self.latent_space1 = nn.ModuleList([mu1, logvar1])
+        
+        mu2 = nn.Linear(input_size, latent_size)
+        logvar2 = nn.Linear(input_size, latent_size)
+        self.latent_space2 = nn.ModuleList([mu2, logvar2])
+
+    def encode(self, xyz, xyz_features):
+        if self.is_dgcnn:
+            xyz_features = self.encoder[0](xyz, xyz_features)
+            return self.encoder[1](xyz_features.squeeze(-1))
+        else:
+            for module in self.encoder[0]:
+                # print()
+                # print(xyz.type(), xyz_features.type())
+                xyz, xyz_features = module(xyz, xyz_features)
+            return self.encoder[1](xyz_features.squeeze(-1))
+
+    def decode1(self, xyz, z):
+        xyz_features = self.concatenate_z_with_pc(xyz, z).transpose(-1, 1).contiguous()
+        for module in self.decoder1[0]:
+            xyz, xyz_features = module(xyz, xyz_features)
+        predicted_dir11 = F.normalize(self.dir11_layer(xyz_features),p=2,dim=1).squeeze(-1)
+        predicted_dir12 = F.normalize(self.dir12_layer(xyz_features),p=2,dim=1).squeeze(-1)
+        predicted_app11 = F.normalize(self.app11_layer(xyz_features),p=2,dim=1).squeeze(-1)
+        predicted_app12 = F.normalize(self.app12_layer(xyz_features),p=2,dim=1).squeeze(-1)
+        predicted_point11 = self.point11_layer(xyz_features).squeeze(-1)
+        predicted_point12 = self.point12_layer(xyz_features).squeeze(-1)
+        
+        predicted_confidence = torch.sigmoid(self.confidence1(xyz_features.squeeze(-1))).squeeze()
+        return predicted_dir11, predicted_dir12, predicted_app11, predicted_app12,\
+                predicted_point11, predicted_point12, predicted_confidence
+        
+    
+    def bottleneck1(self, z):
+        return self.latent_space1[0](z), self.latent_space1[1](z)
+
+    def bottleneck2(self, z):
+        return self.latent_space2[0](z), self.latent_space2[1](z)
+    
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+
+        return mu + eps * std
+
+    def forward(self, pc, grasp=None, train=True):
+        if train:
+            return self.forward_train(pc, grasp)
+        else:
+            return self.forward_test(pc, grasp)
+
+    def forward_train(self, pc, grasp):
+        
+        # grasp pair generate
+        input_features = torch.cat((pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)), -1).transpose(-1, 1).contiguous()
+        z = self.encode(pc, input_features) #(B, 1024)
+        mu, logvar = self.bottleneck1(z)
+        z = self.reparameterize(mu, logvar)
+        dir11, dir12, app11, app12, point11, point12, confidence1 = self.decode1(pc, z)
+        # single grasp generate conditioned with grasp pair, generate grasp 1 first then generate grasp 2
+        
+        grasps1 = utils.get_homog_matrix(app11, dir11, point11, app11.shape[0], device=self.device)
+        grasps2 = utils.get_homog_matrix(app12, dir12, point12, app12.shape[0], device=self.device)
+        
+        input_features2 = torch.cat((pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)), -1).transpose(-1, 1).contiguous()
+        z1 = self.encode(pc, input_features2) #(B, 1024)
+        mu1, logvar1 = self.bottoleneck2(z1)
+        
+        # if self.is_dgcnn:
+        #     input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
+        #     input_features = torch.transpose(input_features, 1, 2).contiguous() # (64, 16, 1024)
+        # else:
+        #     input_features = torch.cat(
+        #         (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
+        #         -1).transpose(-1, 1).contiguous()
+        # start = time()
+        # z = self.encode(pc, input_features) #(64, 1024)
+        # end = time()
+        # # print('encode time', end - start)
+        # mu, logvar = self.bottleneck(z)
+
+        # z = self.reparameterize(mu, logvar)
+        if self.is_bimanual_v3:
+            dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=True)
+            return dir1, dir2, app1, app2, point1, point2, confidence, mu, logvar
+        elif self.is_bimanual and not self.second_grasp_sample:
+            dir1, app1, point1, confidence = self.decode(pc, z, is_bimanual=self.is_bimanual)
+            return dir1, app1, point1, confidence, mu, logvar
+        elif self.second_grasp_sample:
+            first_grasp = grasp[:, :16]
+            dir2, app2, point2, confidence = self.decode(pc, z, is_bimanual=self.is_bimanual, second_grasp_sample=self.second_grasp_sample, first_grasp=first_grasp)
+            return dir2, app2, point2, confidence, mu, logvar
+        else:
+            qt, confidence = self.decode(pc, z, self.is_bimanual_v2, self.is_dgcnn)
+            return qt, confidence, mu, logvar
+            
+    def forward_test(self, pc, grasp):
+        if self.is_dgcnn:
+            input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
+            input_features = torch.transpose(input_features, 1, 2).contiguous() # (64, 16, 1024)
+        else:
+            input_features = torch.cat(
+                (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
+                -1).transpose(-1, 1).contiguous()
+        
+        z = self.encode(pc, input_features)
+        # print(z.shape)
+        mu, logvar = self.bottleneck(z)
+        # print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>check device',z.device, pc.device)
+        #* check if we use logvar when testing
+        if self.use_test_reparam:
+            mu = self.reparameterize(mu, logvar) # (96, 5)
+        
+        if self.is_bimanual_v3:
+            dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, mu, self.is_bimanual_v2, is_bimanual_v3=True)
+            return dir1, dir2, app1, app2, point1, point2, confidence
+        elif self.is_bimanual and not self.second_grasp_sample:
+            dir1, app1, point1, confidence = self.decode(pc, mu, is_bimanual=self.is_bimanual)
+            return dir1, app1, point1, confidence
+        elif self.second_grasp_sample:
+            first_grasp = grasp[:, :16]
+            dir2, app2, point2, confidence = self.decode(pc, mu, is_bimanual=self.is_bimanual, second_grasp_sample=self.second_grasp_sample, first_grasp=first_grasp)
+            return dir2, app2, point2, confidence
+        else:
+            qt, confidence = self.decode(pc, mu, self.is_bimanual_v2, self.is_dgcnn)
+            return qt, confidence
+
+    def sample_latent(self, batch_size):
+        return torch.randn(batch_size, self.latent_size).to(self.device)
+
+    def generate_grasps(self, pc, z=None):
+        if z is None:
+            z = self.sample_latent(pc.shape[0])
+        if self.is_bimanual:
+            dir1, app1, point1, confidence = self.decode(pc, z, is_bimanual=self.is_bimanual)
+            return dir1, app1, point1, confidence, z.squeeze()
+        if self.is_bimanual_v3:
+            dir1, dir2, app1, app2, point1, point2, confidence = self.decode(pc, z, self.is_bimanual_v2, is_bimanual_v3=True)
+            return dir1, dir2, app1, app2, point1, point2, confidence, z.squeeze()
+        else:
+            qt, confidence = self.decode(pc, z, self.is_bimanual_v2)
+            return qt, confidence, z.squeeze()
+
+    def generate_dense_latents(self, resolution):
+        """
+        For the VAE sampler we consider dense latents to correspond to those between -2 and 2
+        """
+        latents = torch.meshgrid(*[
+            torch.linspace(-2, 2, resolution) for i in range(self.latent_size)
+        ])
+        return torch.stack([latents[i].flatten() for i in range(len(latents))],
+                           dim=-1).to(self.device)
+
 
 class GraspSamplerGAN(GraspSampler):
     """
@@ -672,7 +950,6 @@ class BimanualGraspEvaluator(nn.Module):
         
         return l0_xyz, l0_points    
     
-
 
 class GraspSamplerVAEBlock(GraspSampler):
     """Network for learning a generative VAE grasp-sampler

@@ -330,6 +330,17 @@ def transform_control_points_v3(approach, direction, point, batch_size, device="
     
     return torch.matmul(control_points, grasps.permute(0, 2, 1))
     
+def get_homog_matrix(approach, direction, point, batch_size, device="cpu", gripper_depth=0.0675):
+    control_points = get_control_point_tensor(batch_size, device=device, is_bimanual=True)
+    shape = control_points.shape
+    
+    grasps_R = torch.stack([direction, torch.cross(approach, direction), approach], dim=2)
+    grasps_t = point - gripper_depth * approach
+    homog_vec = torch.tensor([0, 0, 0, 1], dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0).repeat(batch_size, 1, 1)
+    grasps = torch.cat((torch.cat((grasps_R, grasps_t.unsqueeze(2)), dim=2), homog_vec), dim=1)
+    
+    return grasps
+    
 
 def transform_control_points(gt_grasps, batch_size, mode='qt', device="cpu", is_bimanual=False):
     """
