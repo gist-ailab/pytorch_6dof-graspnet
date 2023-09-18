@@ -392,7 +392,10 @@ class GraspSamplerVAE(GraspSampler):
             for module in self.encoder[0]:
                 # print()
                 # print(xyz.type(), xyz_features.type())
+                # print('xyz: ', xyz.shape, 'xyz_features: ', xyz_features.shape)
                 xyz, xyz_features = module(xyz, xyz_features)
+            # print(xyz_features.shape)
+            # exit() 
             return self.encoder[1](xyz_features.squeeze(-1))
 
     def bottleneck(self, z):

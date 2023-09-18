@@ -422,5 +422,5 @@ def denormalize_grasps(grasps, mean=0, std=1):
 
 if __name__ == '__main__':
     # main(name='/SSD3/Workspace/pytorch_6dof-graspnet/checkpoints/bengio/vae_lr_0002_bs_192_scale_1_npoints_128_radius_02_latent_size_5_bimanual_v2_bimanual_v3_kl_loss_weight_0.001_use_point_loss')
-    main(name='/SSD3/Workspace/pytorch_6dof-graspnet/checkpoints/yeon/vae_lr_001_bs_256_scale_1_npoints_512128_radius_0204_latent_size_2_bimanual_npoints_4096_kl_loss_weight_0.001_use_point_loss')
+    main(name='/SSD3/Workspace/pytorch_6dof-graspnet/checkpoints/yeon/vae_lr_001_bs_1536_scale_1_npoints_12832_radius_0204_latent_size_2_bimanual_npoints_2048_use_point_loss_train_data_length_3000')
     # main(name='vae_pretrained')
