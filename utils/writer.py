@@ -119,8 +119,12 @@ class Writer:
         self.nexamples = 0
 
     def update_counter(self, ncorrect, nexamples):
-        self.nexamples += nexamples
-        self.ncorrect += ncorrect
+        if self.opt.cross_condition:
+            self.nexamples += nexamples
+            self.ncorrect += ncorrect[0]
+        else:
+            self.nexamples += nexamples
+            self.ncorrect += ncorrect
 
     @property
     def acc(self):

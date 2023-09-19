@@ -336,7 +336,7 @@ def get_homog_matrix(approach, direction, point, batch_size, device="cpu", gripp
     
     grasps_R = torch.stack([direction, torch.cross(approach, direction), approach], dim=2)
     grasps_t = point - gripper_depth * approach
-    homog_vec = torch.tensor([0, 0, 0, 1], dtype=torch.float32, device=device).unsqueeze(0).unsqueeze(0).repeat(batch_size, 1, 1)
+    homog_vec = torch.tensor([0, 0, 0, 1], dtype=torch.float32, device=grasps_R.device).unsqueeze(0).unsqueeze(0).repeat(batch_size, 1, 1)
     grasps = torch.cat((torch.cat((grasps_R, grasps_t.unsqueeze(2)), dim=2), homog_vec), dim=1)
     
     return grasps

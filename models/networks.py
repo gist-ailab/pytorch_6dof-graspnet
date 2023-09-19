@@ -315,7 +315,8 @@ class GraspSampler(nn.Module):
 
         
     def concatenate_z_with_pc(self, pc, z):
-        z.unsqueeze_(1)
+        # z.unsqueeze_(1)
+        z = z.unsqueeze(1)
         z = z.expand(-1, pc.shape[1], -1)
         return torch.cat((pc, z), -1)
 
@@ -523,7 +524,7 @@ class GraspSamplerCrossConditionVAE(GraspSampler):
         # self.is_bimanual = is_bimanual
         # self.second_grasp_sample = second_grasp_sample
         
-        self.create_encoder(model_scale, pointnet_radius, pointnet_nclusters, self.is_dgcnn)
+        self.create_encoder(model_scale, pointnet_radius, pointnet_nclusters)
         self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters, num_input_features=latent_size+3)
         # if self.is_dgcnn:
         #     self.create_decoder(model_scale, pointnet_radius, pointnet_nclusters,
@@ -631,15 +632,12 @@ class GraspSamplerCrossConditionVAE(GraspSampler):
         self.latent_space2 = nn.ModuleList([mu2, logvar2])
 
     def encode(self, xyz, xyz_features):
-        if self.is_dgcnn:
-            xyz_features = self.encoder[0](xyz, xyz_features)
-            return self.encoder[1](xyz_features.squeeze(-1))
-        else:
-            for module in self.encoder[0]:
-                # print()
-                # print(xyz.type(), xyz_features.type())
-                xyz, xyz_features = module(xyz, xyz_features)
-            return self.encoder[1](xyz_features.squeeze(-1))
+        
+        for module in self.encoder[0]:
+            # print()
+            # print(xyz.type(), xyz_features.type())
+            xyz, xyz_features = module(xyz, xyz_features)
+        return self.encoder[1](xyz_features.squeeze(-1))
 
     def decode1(self, xyz, z):
         xyz_features = self.concatenate_z_with_pc(xyz, z).transpose(-1, 1).contiguous()
@@ -655,6 +653,18 @@ class GraspSamplerCrossConditionVAE(GraspSampler):
         predicted_confidence = torch.sigmoid(self.confidence1(xyz_features.squeeze(-1))).squeeze()
         return predicted_dir11, predicted_dir12, predicted_app11, predicted_app12,\
                 predicted_point11, predicted_point12, predicted_confidence
+        
+    def decode2(self, xyz, z, condition_grasp):
+        xyz_features = self.concatenate_z_with_pc(xyz, z)
+        xyz_features = torch.cat((xyz_features, condition_grasp.unsqueeze(1).expand(-1, xyz.shape[1], -1)), -1).transpose(-1,1).contiguous()
+        for module in self.decoder2[0]:
+            xyz, xyz_features = module(xyz, xyz_features)
+        predicted_dir2 = F.normalize(self.dir2_layer(xyz_features),p=2,dim=1).squeeze(-1)
+        predicted_app2 = F.normalize(self.app2_layer(xyz_features),p=2,dim=1).squeeze(-1)
+        predicted_point2 = F.normalize(self.point2_layer(xyz_features),p=2,dim=1).squeeze(-1)
+        
+        predicted_confidence2 = torch.sigmoid(self.confidence2(xyz_features.squeeze(-1))).squeeze()
+        return predicted_dir2, predicted_app2, predicted_point2, predicted_confidence2
         
     
     def bottleneck1(self, z):
@@ -684,14 +694,24 @@ class GraspSamplerCrossConditionVAE(GraspSampler):
         z = self.reparameterize(mu, logvar)
         dir11, dir12, app11, app12, point11, point12, confidence1 = self.decode1(pc, z)
         # single grasp generate conditioned with grasp pair, generate grasp 1 first then generate grasp 2
-        
         grasps1 = utils.get_homog_matrix(app11, dir11, point11, app11.shape[0], device=self.device)
         grasps2 = utils.get_homog_matrix(app12, dir12, point12, app12.shape[0], device=self.device)
-        
-        input_features2 = torch.cat((pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)), -1).transpose(-1, 1).contiguous()
+        grasps1 = grasps1.reshape(-1, 16)
+        grasps2 = grasps2.reshape(-1, 16)
+        pred_grasps = torch.cat([grasps1, grasps2], dim=1)
+        pred_grasps = pred_grasps.requires_grad_(True)
+
+        input_features2 = torch.cat((pc, pred_grasps.unsqueeze(1).expand(-1, pc.shape[1], -1)), -1).transpose(-1, 1).contiguous()
         z1 = self.encode(pc, input_features2) #(B, 1024)
-        mu1, logvar1 = self.bottoleneck2(z1)
+        mu1, logvar1 = self.bottleneck2(z1)
+        z1 = self.reparameterize(mu1, logvar1)
+        # generate grasp1
+        dir21, app21, point21, confidence21 = self.decode2(pc, z1, grasps2)
+        # generate grasp2
+        dir22, app22, point22, confidence22 = self.decode2(pc, z1, grasps1)
         
+        return [dir11, dir12, app11, app12, point11, point12, confidence1, mu, logvar],\
+                [dir21, dir22, app21, app22, point21, point22, confidence21, confidence22, mu1, logvar1]
         # if self.is_dgcnn:
         #     input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
         #     input_features = torch.transpose(input_features, 1, 2).contiguous() # (64, 16, 1024)
@@ -721,13 +741,38 @@ class GraspSamplerCrossConditionVAE(GraspSampler):
             return qt, confidence, mu, logvar
             
     def forward_test(self, pc, grasp):
-        if self.is_dgcnn:
-            input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
-            input_features = torch.transpose(input_features, 1, 2).contiguous() # (64, 16, 1024)
-        else:
-            input_features = torch.cat(
-                (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
-                -1).transpose(-1, 1).contiguous()
+        
+        input_features = torch.cat((pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)), -1).transpose(-1, 1).contiguous()
+        z = self.encode(pc, input_features) #(B, 1024)
+        mu, logvar = self.bottleneck1(z)
+        
+        dir11, dir12, app11, app12, point11, point12, confidence1 = self.decode1(pc, mu)
+        
+        grasps1 = utils.get_homog_matrix(app11, dir11, point11, app11.shape[0], device=self.device)
+        grasps2 = utils.get_homog_matrix(app12, dir12, point12, app12.shape[0], device=self.device)
+        grasps1 = grasps1.reshape(-1, 16)
+        grasps2 = grasps2.reshape(-1, 16)
+        pred_grasps = torch.cat([grasps1, grasps2], dim=1)
+        
+        input_features2 = torch.cat((pc, pred_grasps.unsqueeze(1).expand(-1, pc.shape[1], -1)), -1).transpose(-1, 1).contiguous()
+        z1 = self.encode(pc, input_features2) #(B, 1024)
+        mu1, logvar1 = self.bottleneck2(z1)
+        
+        # generate grasp1
+        dir21, app21, point21, confidence21 = self.decode2(pc, mu1, grasps2)
+        # generate grasp2
+        dir22, app22, point22, confidence22 = self.decode2(pc, mu1, grasps1)
+        
+        return [dir11, dir12, app11, app12, point11, point12, confidence1],\
+                [dir21, dir22, app21, app22, point21, point22, confidence21, confidence22]
+        
+        # if self.is_dgcnn:
+        #     input_features = grasp.unsqueeze(1).expand(-1, pc.shape[1], -1) # (64, 1024, 16)
+        #     input_features = torch.transpose(input_features, 1, 2).contiguous() # (64, 16, 1024)
+        # else:
+        #     input_features = torch.cat(
+        #         (pc, grasp.unsqueeze(1).expand(-1, pc.shape[1], -1)),
+        #         -1).transpose(-1, 1).contiguous()
         
         z = self.encode(pc, input_features)
         # print(z.shape)

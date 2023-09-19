@@ -72,38 +72,54 @@ def main():
             model.set_input(data)
             model.optimize_parameters()
             if total_steps % opt.print_freq == 0:
-                loss_types = []
-                if opt.arch == "vae":
-                    loss = [
-                        model.loss, model.kl_loss, model.reconstruction_loss,
-                        model.confidence_loss
-                    ]
-                    loss_types = [
-                        "total_loss", "kl_loss", "reconstruction_loss",
-                        "confidence loss"
-                    ]
-                elif opt.arch == "gan":
-                    loss = [
-                        model.loss, model.reconstruction_loss,
-                        model.confidence_loss
-                    ]
-                    loss_types = [
-                        "total_loss", "reconstruction_loss", "confidence_loss"
-                    ]
+                if not opt.cross_condition:
+                    loss_types = []
+                    if opt.arch == "vae":
+                        loss = [
+                            model.loss, model.kl_loss, model.reconstruction_loss,
+                            model.confidence_loss
+                        ]
+                        loss_types = [
+                            "total_loss", "kl_loss", "reconstruction_loss",
+                            "confidence loss"
+                        ]
+                    elif opt.arch == "gan":
+                        loss = [
+                            model.loss, model.reconstruction_loss,
+                            model.confidence_loss
+                        ]
+                        loss_types = [
+                            "total_loss", "reconstruction_loss", "confidence_loss"
+                        ]
+                    else:
+                        loss = [
+                            model.loss, model.classification_loss,
+                            model.confidence_loss
+                        ]
+                        loss_types = [
+                            "total_loss", "classification_loss", "confidence_loss"
+                        ]
+                    t = (time.time() - iter_start_time) / opt.batch_size
+                    writer.print_current_losses(epoch, epoch_iter, loss, t, t_data,
+                                                loss_types)
+                    writer.plot_loss(loss, epoch, epoch_iter, dataset_size,
+                                    loss_types)
                 else:
-                    loss = [
-                        model.loss, model.classification_loss,
-                        model.confidence_loss
-                    ]
-                    loss_types = [
-                        "total_loss", "classification_loss", "confidence_loss"
-                    ]
-                t = (time.time() - iter_start_time) / opt.batch_size
-                writer.print_current_losses(epoch, epoch_iter, loss, t, t_data,
-                                            loss_types)
-                writer.plot_loss(loss, epoch, epoch_iter, dataset_size,
-                                 loss_types)
-
+                    loss1 = [model.loss[0], model.kl_loss[0], model.reconstruction_loss[0], model.confidence_loss[0]]
+                    loss2 = [model.loss[1], model.kl_loss[1], model.reconstruction_loss[1], model.confidence_loss[1]]
+                    loss1_types = [
+                            "total_loss1", "kl_loss1", "reconstruction_loss1",
+                            "confidence loss1"]
+                    loss2_types = [
+                            "total_loss2", "kl_loss2", "reconstruction_loss2",
+                            "confidence loss2"]
+                    t = (time.time() - iter_start_time) / opt.batch_size
+                    writer.print_current_losses(epoch, epoch_iter, loss1, t, t_data, loss1_types)
+                    writer.print_current_losses(epoch, epoch_iter, loss2, t, t_data, loss2_types)
+                    writer.plot_loss(loss1, epoch, epoch_iter, dataset_size, loss1_types)
+                    writer.plot_loss(loss2, epoch, epoch_iter, dataset_size, loss2_types)
+                    
+                
             if i % opt.save_latest_freq == 0:
                 print('saving the latest model (epoch %d, total_steps %d)' %
                       (epoch, total_steps))
