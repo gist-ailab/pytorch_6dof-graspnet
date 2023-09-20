@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 import open3d as o3d
+import math
 # import mayavi.mlab as mlab
 def control_point_l1_loss_better_than_threshold(pred_control_points,
                                                 gt_control_points,
@@ -48,13 +49,15 @@ def control_point_l1_loss(pred_control_points,
                           pred_middle_point=None,
                           use_anchor=False,
                           pc=None,
-                          use_block=False):
+                          use_block=False,
+                          use_angle_loss=False):
     """
       Computes the l1 loss between the predicted control points and the
       groundtruth control points on the gripper.
     """
     #print('control_point_l1_loss', pred_control_points.shape,
     #      gt_control_points.shape)
+    angle_error = 0
     
     if not is_bimanual_v2:
         error = torch.sum(torch.abs(pred_control_points - gt_control_points), -1)
@@ -147,13 +150,35 @@ def control_point_l1_loss(pred_control_points,
             error = error1 + error2
         else:
 
-            error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1)
+            error1 = torch.sum(torch.abs(pred_control_points[0] - gt_control_points[0]), -1) # (batch, 6)
             error2 = torch.sum(torch.abs(pred_control_points[1] - gt_control_points[1]), -1)
-            
-            error = error1 + error2
+            error = error1 + error2 # (batch, 6)
+            if use_angle_loss:
 
+            # for angle loss between two grasps
+                gt_middle_point1 = (gt_control_points[0,:,4] + gt_control_points[0,:,5]) / 2 # (batch, 3)
+                gt_middle_point2 = (gt_control_points[1,:,4] + gt_control_points[1,:,5]) / 2
+                gt_dot = torch.sum(gt_middle_point1*gt_middle_point2, dim=1) # (batch)
+                gt_norm = torch.norm(gt_middle_point1, dim=1) * torch.norm(gt_middle_point2, dim=1) # (batch)
+                gt_angle = torch.acos(torch.clamp(gt_dot/gt_norm, -1, 1)) # (batch)
+                gt_degrees = gt_angle * (180/math.pi)
+
+                pred_middle_point1 = (pred_control_points[0,:,4] + pred_control_points[0,:,5]) / 2
+                pred_middle_point2 = (pred_control_points[1,:,4] + pred_control_points[1,:,5]) / 2
+                pred_dot = torch.sum(pred_middle_point1*pred_middle_point2, dim=1)
+                pred_norm = torch.norm(pred_middle_point1, dim=1) * torch.norm(pred_middle_point2, dim=1)
+                pred_angle = torch.acos(torch.clamp(pred_dot/pred_norm, -1, 1))
+                pred_degrees = pred_angle * (180/math.pi)
+                
+                angle_error = (gt_degrees - pred_degrees) % 360 # Ensure angles are within [0, 360)
+                angle_error = torch.min(angle_error, 360-angle_error) # Take the minimum angle difference
+
+                angle_error = torch.mean(torch.pow(angle_error, 2),-1) # Mean squared error 
+
+                
     if not use_anchor:
         error = torch.mean(error, -1)
+
     if confidence is not None:
 
         assert (confidence_weight is not None)
@@ -168,7 +193,7 @@ def control_point_l1_loss(pred_control_points,
     if confidence is None:
         return torch.mean(error)
     else:
-        return torch.mean(error), -confidence_term
+        return torch.mean(error), -confidence_term, angle_error
 
 def classification_with_confidence_loss(pred_logit,
                                         gt,

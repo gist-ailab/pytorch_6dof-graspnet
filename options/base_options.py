@@ -245,6 +245,11 @@ class BaseOptions:
             type=bool,
             default=False
         )
+        self.parser.add_argument(
+            '--use_angle_loss',
+            type=bool,
+            default=False
+        )
         
     def parse(self):
         if not self.initialized:
@@ -318,6 +323,8 @@ class BaseOptions:
                 name += "_num_grasps_per_object2_" + str(self.opt.num_grasps_per_object2)
             if self.opt.cross_condition:
                 name += "_cross_condition"
+            if self.opt.use_angle_loss:
+                name += "_use_angle_loss"
             name += "_train_data_length_" + str(self.opt.train_data_length)
             self.opt.name = name
             expr_dir = os.path.join(self.opt.checkpoints_dir, self.opt.name)

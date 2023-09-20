@@ -35,6 +35,7 @@ class GraspNetModel:
         if self.opt.arch == "vae":
             self.kl_loss = None
             self.reconstruction_loss = None
+            self.angle_loss = None
         elif self.opt.arch == "gan":
             self.reconstruction_loss = None
         else:
@@ -257,7 +258,7 @@ class GraspNetModel:
                 if not self.opt.cross_condition:
                     predicted_cp = torch.cat([predicted_cp1.unsqueeze(0), predicted_cp2.unsqueeze(0)], dim=0)# (2, 64, 6, 3)
                     predicted_cp = predicted_cp.to(device=self.device)
-                    self.reconstruction_loss, self.confidence_loss = self.criterion[1](
+                    self.reconstruction_loss, self.confidence_loss, self.angle_loss = self.criterion[1](
                         predicted_cp,
                         self.targets,
                         confidence=confidence,
@@ -266,37 +267,45 @@ class GraspNetModel:
                         is_bimanual_v2=self.opt.is_bimanual_v2,
                         point_loss=self.opt.use_point_loss,
                         pred_middle_point=predicted_point,
-                        pc=self.pcs)
+                        pc=self.pcs,
+                        use_angle_loss=self.opt.use_angle_loss)
                 else:
                     predicted_cp = torch.cat([predicted_cp11.unsqueeze(0), predicted_cp12.unsqueeze(0)], dim=0)
                     predicted_cp = predicted_cp.to(device=self.device)
-                    predicted_cp2 = torch.cat([predicted_cp21.unsqueeze(0), predicted_cp22.unsqueeze(0)], dim=0)
-                    predicted_cp2 = predicted_cp2.to(device=self.device)
-                    
-                    reconstruction_loss1, confidence_loss1 = self.criterion[1](
+                    # predicted_cp2 = torch.cat([predicted_cp21.unsqueeze(0), predicted_cp22.unsqueeze(0)], dim=0)
+                    # predicted_cp2 = predicted_cp2.to(device=self.device)
+
+                    reconstruction_loss1, confidence_loss1, _ = self.criterion[1](
                         predicted_cp,
                         self.targets,
                         confidence=confidence1,
                         confidence_weight=self.opt.confidence_weight,
                         device=self.device,
                         is_bimanual_v2=self.opt.is_bimanual_v2)
-                    reconstruction_loss2, confidence_loss2 = self.criterion[1](
-                        predicted_cp2,
-                        predicted_cp,
-                        confidence=confidence21+confidence22,
+                    reconstruction_loss21, confidence_loss21, _ = self.criterion[1](
+                        predicted_cp21,
+                        predicted_cp11,
+                        confidence=confidence21,
                         confidence_weight=self.opt.confidence_weight,
-                        device=self.device,
-                        is_bimanual_v2=self.opt.is_bimanual_v2)
-                    self.reconstruction_loss = [reconstruction_loss1, reconstruction_loss2]
-                    self.confidence_loss = [confidence_loss1, confidence_loss2]
+                        device=self.device)
+                    reconstruction_loss22, confidence_loss22, _ = self.criterion[1](
+                        predicted_cp22,
+                        predicted_cp12,
+                        confidence=confidence22,
+                        confidence_weight=self.opt.confidence_weight,
+                        device=self.device)
+
+                    self.reconstruction_loss = [reconstruction_loss1, reconstruction_loss21, reconstruction_loss22]
+                    self.confidence_loss = [confidence_loss1, confidence_loss21, confidence_loss22]
                     
-                    kld1 = self.criterion[0](mu, logvar, device=self.device)
-                    kld1 = self.annealing_agent(kld1)
-                    kld2 = self.criterion[0](mu1, logvar1, device=self.device)
-                    kld2 = self.annealing_agent(kld2)
+                    kld1 = self.criterion[0](mu, logvar, device=self.device) * self.opt.kl_loss_weight
+                    # kld1 = self.annealing_agent(kld1)
+                    kld2 = self.criterion[0](mu1, logvar1, device=self.device) * self.opt.kl_loss_weight
+                    # kld2 = self.annealing_agent(kld2)
                     
                     self.kl_loss = [kld1, kld2]
-                    self.loss = [reconstruction_loss1 + confidence_loss1 + kld1, reconstruction_loss2 + confidence_loss2 + kld2]
+                    self.loss = [reconstruction_loss1 + confidence_loss1 + kld1, 
+                                 reconstruction_loss21 + confidence_loss21 + kld2, reconstruction_loss22 + confidence_loss22 + kld2]
                     
             if not self.opt.use_block and not self.opt.cross_condition:
                 kld = self.criterion[0](mu, logvar, device=self.device)
@@ -304,7 +313,7 @@ class GraspNetModel:
                 # self.kl_loss = self.opt.kl_loss_weight * self.criterion[0](
                 #         mu, logvar, device=self.device)
 
-                self.loss = self.kl_loss + self.reconstruction_loss + self.confidence_loss
+                self.loss = self.kl_loss + self.reconstruction_loss + self.confidence_loss + self.angle_loss
                 
         elif self.opt.arch == 'gan':
             if self.opt.is_bimanual_v2:
@@ -369,6 +378,7 @@ class GraspNetModel:
             # self.loss = self.loss.transpose(0, 1)
             # exit()
         elif self.opt.cross_condition:
+            self.loss[2].backward(retain_graph=True)
             self.loss[1].backward(retain_graph=True)
             self.loss[0].backward()
         else:
@@ -545,7 +555,7 @@ class GraspNetModel:
                             predicted_cp = torch.cat([predicted_cp1.unsqueeze(0), predicted_cp2.unsqueeze(0)], dim=0)# (2, 64, 6, 3)
                             predicted_cp = predicted_cp.to(device=self.device)
                             
-                            reconstruction_loss, _ = self.criterion[1](
+                            reconstruction_loss, _, _ = self.criterion[1](
                                 predicted_cp,
                                 self.targets,
                                 confidence=confidence,
@@ -553,31 +563,37 @@ class GraspNetModel:
                                 device=self.device,
                                 is_bimanual_v2=self.opt.is_bimanual_v2,
                                 point_loss=self.opt.use_point_loss,
-                                pred_middle_point=predicted_point)
+                                pred_middle_point=predicted_point,
+                                use_angle_loss=self.opt.use_angle_loss)
                             
                             return reconstruction_loss, 1
                         else:
                             predicted_cp = torch.cat([predicted_cp11.unsqueeze(0), predicted_cp12.unsqueeze(0)], dim=0)
                             predicted_cp = predicted_cp.to(device=self.device)
-                            predicted_cp2 = torch.cat([predicted_cp21.unsqueeze(0), predicted_cp22.unsqueeze(0)], dim=0)
-                            predicted_cp2 = predicted_cp2.to(device=self.device)
+                            # predicted_cp2 = torch.cat([predicted_cp21.unsqueeze(0), predicted_cp22.unsqueeze(0)], dim=0)
+                            # predicted_cp2 = predicted_cp2.to(device=self.device)
                             
-                            reconstruction_loss1, _ = self.criterion[1](
+                            reconstruction_loss1, _, _ = self.criterion[1](
                                 predicted_cp,
                                 self.targets,
                                 confidence=confidence,
                                 confidence_weight=self.opt.confidence_weight,
                                 device=self.device,
                                 is_bimanual_v2=self.opt.is_bimanual_v2)
-                            reconstruction_loss2, _ = self.criterion[1](
-                                predicted_cp2,
-                                predicted_cp,
-                                confidence=confidence21+confidence22,
+                            reconstruction_loss21, _, _ = self.criterion[1](
+                                predicted_cp21,
+                                predicted_cp11,
+                                confidence=confidence21,
                                 confidence_weight=self.opt.confidence_weight,
-                                device=self.device,
-                                is_bimanual_v2=self.opt.is_bimanual_v2)
+                                device=self.device)
+                            reconstruction_loss22, _, _ = self.criterion[1](
+                                predicted_cp22,
+                                predicted_cp12,
+                                confidence=confidence21,
+                                confidence_weight=self.opt.confidence_weight,
+                                device=self.device)
                             
-                            return [reconstruction_loss1, reconstruction_loss2], 1
+                            return [reconstruction_loss1, reconstruction_loss21, reconstruction_loss22], 1
                                     
                 elif self.opt.arch == "gan":
                     if not self.opt.is_bimanual_v2:

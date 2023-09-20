@@ -77,11 +77,11 @@ def main():
                     if opt.arch == "vae":
                         loss = [
                             model.loss, model.kl_loss, model.reconstruction_loss,
-                            model.confidence_loss
+                            model.confidence_loss, model.angle_loss
                         ]
                         loss_types = [
                             "total_loss", "kl_loss", "reconstruction_loss",
-                            "confidence loss"
+                            "confidence loss", "angle_loss"
                         ]
                     elif opt.arch == "gan":
                         loss = [
@@ -106,18 +106,25 @@ def main():
                                     loss_types)
                 else:
                     loss1 = [model.loss[0], model.kl_loss[0], model.reconstruction_loss[0], model.confidence_loss[0]]
-                    loss2 = [model.loss[1], model.kl_loss[1], model.reconstruction_loss[1], model.confidence_loss[1]]
+                    loss21 = [model.loss[1], model.kl_loss[1], model.reconstruction_loss[1], model.confidence_loss[1]]
+                    loss22 = [model.loss[2], model.kl_loss[1], model.reconstruction_loss[2], model.confidence_loss[2]]
                     loss1_types = [
                             "total_loss1", "kl_loss1", "reconstruction_loss1",
                             "confidence loss1"]
-                    loss2_types = [
-                            "total_loss2", "kl_loss2", "reconstruction_loss2",
-                            "confidence loss2"]
+                    loss21_types = [
+                            "total_loss21", "kl_loss21", "reconstruction_loss21",
+                            "confidence loss21"]
+                    loss22_types = [
+                            "total_loss22", "kl_loss22", "reconstruction_loss22",
+                            "confidence loss22"]
+                    
                     t = (time.time() - iter_start_time) / opt.batch_size
                     writer.print_current_losses(epoch, epoch_iter, loss1, t, t_data, loss1_types)
-                    writer.print_current_losses(epoch, epoch_iter, loss2, t, t_data, loss2_types)
+                    writer.print_current_losses(epoch, epoch_iter, loss21, t, t_data, loss21_types)
+                    writer.print_current_losses(epoch, epoch_iter, loss22, t, t_data, loss22_types)
                     writer.plot_loss(loss1, epoch, epoch_iter, dataset_size, loss1_types)
-                    writer.plot_loss(loss2, epoch, epoch_iter, dataset_size, loss2_types)
+                    writer.plot_loss(loss21, epoch, epoch_iter, dataset_size, loss21_types)
+                    writer.plot_loss(loss22, epoch, epoch_iter, dataset_size, loss22_types)
                     
                 
             if i % opt.save_latest_freq == 0:

@@ -699,7 +699,7 @@ class GraspSamplerCrossConditionVAE(GraspSampler):
         grasps1 = grasps1.reshape(-1, 16)
         grasps2 = grasps2.reshape(-1, 16)
         pred_grasps = torch.cat([grasps1, grasps2], dim=1)
-        pred_grasps = pred_grasps.requires_grad_(True)
+        # pred_grasps = pred_grasps.requires_grad_(True)
 
         input_features2 = torch.cat((pc, pred_grasps.unsqueeze(1).expand(-1, pc.shape[1], -1)), -1).transpose(-1, 1).contiguous()
         z1 = self.encode(pc, input_features2) #(B, 1024)
